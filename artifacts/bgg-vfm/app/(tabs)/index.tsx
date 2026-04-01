@@ -17,7 +17,7 @@ import { StatCard } from "@/components/StatCard";
 import { Game, useVFM } from "@/context/VFMContext";
 import { useColors } from "@/hooks/useColors";
 
-type FilterType = "all" | "sale" | "purchase";
+type FilterType = "all" | "listed" | "sold" | "purchase";
 
 export default function HomeScreen() {
   const colors = useColors();
@@ -33,7 +33,10 @@ export default function HomeScreen() {
   const bottomPad = Platform.OS === "web" ? 34 : 0;
 
   const filtered = games.filter((g) => {
-    const matchFilter = filter === "all" || g.type === filter;
+    let matchFilter = true;
+    if (filter === "listed") matchFilter = g.type === "sale" && g.status === "listed";
+    else if (filter === "sold") matchFilter = g.type === "sale" && g.status === "sold";
+    else if (filter === "purchase") matchFilter = g.type === "purchase";
     const matchSearch =
       search.length === 0 ||
       g.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -185,7 +188,7 @@ export default function HomeScreen() {
                 </View>
 
                 <View style={styles.filterRow}>
-                  {(["all", "sale", "purchase"] as FilterType[]).map((f) => (
+                  {(["all", "listed", "sold", "purchase"] as FilterType[]).map((f) => (
                     <TouchableOpacity
                       key={f}
                       style={[
@@ -210,7 +213,7 @@ export default function HomeScreen() {
                           },
                         ]}
                       >
-                        {f === "all" ? "All" : f === "sale" ? "Sales" : "Purchases"}
+                        {f === "all" ? "All" : f === "listed" ? "Listed" : f === "sold" ? "Sold" : "Purchased"}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -341,6 +344,7 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     marginBottom: 16,
   },
