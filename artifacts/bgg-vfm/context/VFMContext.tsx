@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { getBaseUrl } from "@workspace/api-client-react";
 
 export type ListingStatus = "listed" | "sold" | "expired" | "withdrawn";
 export type TransactionType = "sale" | "purchase";
@@ -32,6 +33,17 @@ export interface BggSettings {
   realName: string;
 }
 
+export interface SyncResult {
+  sales: number;
+  purchases: number;
+  listTitle: string;
+}
+
+function extractListId(url: string): string | null {
+  const m = url.match(/geeklist\/(\d+)/);
+  return m ? m[1] : null;
+}
+
 interface VFMContextValue {
   games: Game[];
   addGame: (game: Omit<Game, "id" | "createdAt" | "updatedAt" | "source">) => void;
@@ -49,6 +61,8 @@ interface VFMContextValue {
   saveBggSettings: (s: BggSettings) => void;
   lastSyncedAt: string | null;
   setLastSyncedAt: (v: string | null) => void;
+  syncFromBgg: (overrideSettings?: BggSettings) => Promise<SyncResult>;
+  isSyncing: boolean;
 }
 
 const VFMContext = createContext<VFMContextValue | null>(null);
@@ -68,6 +82,7 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
   const [games, setGames] = useState<Game[]>([]);
   const [bggSettings, setBggSettings] = useState<BggSettings>(DEFAULT_SETTINGS);
   const [lastSyncedAt, setLastSyncedAtState] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -165,6 +180,64 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
     else AsyncStorage.removeItem(SYNC_KEY);
   }, []);
 
+  const syncFromBgg = useCallback(
+    async (overrideSettings?: BggSettings): Promise<SyncResult> => {
+      const settings = overrideSettings ?? bggSettings;
+      const listId = extractListId(settings.geeklistUrl);
+
+      if (!listId) throw new Error("No geeklist ID found in the saved URL. Open settings to configure.");
+      if (!settings.username) throw new Error("No BGG username saved. Open settings to configure.");
+      if (!settings.apiToken) throw new Error("No API token saved. Open settings to configure.");
+
+      setIsSyncing(true);
+      try {
+        const params = new URLSearchParams({
+          listId,
+          username: settings.username,
+          apiToken: settings.apiToken,
+        });
+        if (settings.realName) params.set("realName", settings.realName);
+
+        const base = getBaseUrl();
+        const resp = await fetch(`${base}/api/bgg/geeklist?${params.toString()}`);
+
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({ error: "Unknown error" }));
+          throw new Error(body.error ?? `HTTP ${resp.status}`);
+        }
+
+        const data = await resp.json();
+        const { items, listTitle } = data;
+
+        const mapped = items.map((item: any) => ({
+          id: `bgg_${item.id}`,
+          title: item.gameTitle,
+          price: item.price ?? 0,
+          type: item.type,
+          status: item.status,
+          buyerSeller: item.buyerSeller,
+          condition: item.condition,
+          notes: item.notes,
+          source: "bgg" as const,
+        }));
+
+        replaceBggGames(mapped);
+        const now = new Date().toISOString();
+        setLastSyncedAtState(now);
+        AsyncStorage.setItem(SYNC_KEY, now);
+
+        return {
+          sales: mapped.filter((g: any) => g.type === "sale").length,
+          purchases: mapped.filter((g: any) => g.type === "purchase").length,
+          listTitle,
+        };
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [bggSettings, replaceBggGames]
+  );
+
   const stats = {
     listedCount: games.filter(
       (g) => g.type === "sale" && g.status === "listed"
@@ -194,6 +267,8 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
         saveBggSettings,
         lastSyncedAt,
         setLastSyncedAt,
+        syncFromBgg,
+        isSyncing,
       }}
     >
       {children}
