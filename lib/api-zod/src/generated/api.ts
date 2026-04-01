@@ -14,3 +14,32 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Fetches a BGG geeklist via the XML API and returns parsed items filtered by username
+ * @summary Fetch and parse a BGG geeklist
+ */
+export const GetBggGeeklistQueryParams = zod.object({
+  listId: zod.coerce
+    .string()
+    .describe("The BGG geeklist ID (extracted from the URL)"),
+  username: zod.coerce.string().describe("BGG username to filter items by"),
+  apiToken: zod.coerce.string().describe("BGG API bearer token"),
+});
+
+export const GetBggGeeklistResponse = zod.object({
+  listTitle: zod.string(),
+  totalItems: zod.number(),
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      gameTitle: zod.string(),
+      price: zod.number(),
+      type: zod.enum(["sale", "purchase"]),
+      status: zod.enum(["listed", "sold", "withdrawn", "expired"]),
+      buyerSeller: zod.string().optional(),
+      condition: zod.string().optional(),
+      notes: zod.string().optional(),
+    }),
+  ),
+});

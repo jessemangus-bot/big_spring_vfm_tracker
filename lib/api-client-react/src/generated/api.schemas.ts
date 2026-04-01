@@ -8,3 +8,55 @@
 export interface HealthStatus {
   status: string;
 }
+
+export type BggItemType = (typeof BggItemType)[keyof typeof BggItemType];
+
+export const BggItemType = {
+  sale: "sale",
+  purchase: "purchase",
+} as const;
+
+export type BggItemStatus = (typeof BggItemStatus)[keyof typeof BggItemStatus];
+
+export const BggItemStatus = {
+  listed: "listed",
+  sold: "sold",
+  withdrawn: "withdrawn",
+  expired: "expired",
+} as const;
+
+export interface BggItem {
+  id: string;
+  gameTitle: string;
+  price: number;
+  type: BggItemType;
+  status: BggItemStatus;
+  buyerSeller?: string;
+  condition?: string;
+  notes?: string;
+}
+
+export interface BggGeelist {
+  listTitle: string;
+  totalItems: number;
+  items: BggItem[];
+}
+
+export interface ErrorResponse {
+  error: string;
+}
+
+export type GetBggGeeklistParams = {
+  /**
+   * The BGG geeklist ID (extracted from the URL)
+   */
+  listId: string;
+  /**
+   * BGG username to filter items by
+   */
+  username: string;
+  /**
+   * BGG API bearer token
+   */
+  apiToken: string;
+};

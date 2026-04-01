@@ -6,4 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./bggGeelist";
+export * from "./bggItem";
+export * from "./bggItemStatus";
+export * from "./bggItemType";
+export * from "./errorResponse";
+export * from "./getBggGeeklistParams";
 export * from "./healthStatus";

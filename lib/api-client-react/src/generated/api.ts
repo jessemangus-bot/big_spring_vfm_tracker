@@ -13,7 +13,12 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  BggGeelist,
+  ErrorResponse,
+  GetBggGeeklistParams,
+  HealthStatus,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
 import type { ErrorType } from "../custom-fetch";
@@ -92,6 +97,101 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Fetches a BGG geeklist via the XML API and returns parsed items filtered by username
+ * @summary Fetch and parse a BGG geeklist
+ */
+export const getGetBggGeeklistUrl = (params: GetBggGeeklistParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/bgg/geeklist?${stringifiedParams}`
+    : `/api/bgg/geeklist`;
+};
+
+export const getBggGeeklist = async (
+  params: GetBggGeeklistParams,
+  options?: RequestInit,
+): Promise<BggGeelist> => {
+  return customFetch<BggGeelist>(getGetBggGeeklistUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBggGeeklistQueryKey = (params?: GetBggGeeklistParams) => {
+  return [`/api/bgg/geeklist`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetBggGeeklistQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBggGeeklist>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: GetBggGeeklistParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBggGeeklist>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBggGeeklistQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBggGeeklist>>> = ({
+    signal,
+  }) => getBggGeeklist(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBggGeeklist>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBggGeeklistQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBggGeeklist>>
+>;
+export type GetBggGeeklistQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Fetch and parse a BGG geeklist
+ */
+
+export function useGetBggGeeklist<
+  TData = Awaited<ReturnType<typeof getBggGeeklist>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: GetBggGeeklistParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBggGeeklist>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBggGeeklistQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

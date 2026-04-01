@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: bgg
+    description: BoardGameGeek operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /bgg/geeklist:
+    get:
+      operationId: getBggGeeklist
+      tags: [bgg]
+      summary: Fetch and parse a BGG geeklist
+      description: Fetches a BGG geeklist via the XML API and returns parsed items filtered by username
+      parameters:
+        - name: listId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The BGG geeklist ID (extracted from the URL)
+        - name: username
+          in: query
+          required: true
+          schema:
+            type: string
+          description: BGG username to filter items by
+        - name: apiToken
+          in: query
+          required: true
+          schema:
+            type: string
+          description: BGG API bearer token
+      responses:
+        "200":
+          description: Parsed geeklist items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BggGeelist"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: BGG API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +79,52 @@ components:
           type: string
       required:
         - status
-
+    BggGeelist:
+      type: object
+      properties:
+        listTitle:
+          type: string
+        totalItems:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BggItem"
+      required:
+        - listTitle
+        - totalItems
+        - items
+    BggItem:
+      type: object
+      properties:
+        id:
+          type: string
+        gameTitle:
+          type: string
+        price:
+          type: number
+        type:
+          type: string
+          enum: [sale, purchase]
+        status:
+          type: string
+          enum: [listed, sold, withdrawn, expired]
+        buyerSeller:
+          type: string
+        condition:
+          type: string
+        notes:
+          type: string
+      required:
+        - id
+        - gameTitle
+        - price
+        - type
+        - status
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error

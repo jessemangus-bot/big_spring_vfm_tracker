@@ -48,6 +48,17 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 - `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
+## Artifacts
+
+### `artifacts/bgg-vfm` (`@workspace/bgg-vfm`)
+
+Expo mobile app for tracking BGG Spring 2026 VFM marketplace activity. Uses AsyncStorage for local persistence. Can sync directly from a BGG geeklist via the api-server proxy.
+
+- Screens: Dashboard (stats + game list), Settings modal (BGG URL, username, API token), Add/Edit modal
+- Context: `VFMContext` manages games, stats, and BGG settings
+- BGG sync: Calls `/api/bgg/geeklist` which proxies and parses BGG XML
+- Sources: Games can be "manual" (user-added) or "bgg" (synced from BGG)
+
 ## Packages
 
 ### `artifacts/api-server` (`@workspace/api-server`)

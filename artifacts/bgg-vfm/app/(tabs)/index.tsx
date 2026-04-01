@@ -3,7 +3,6 @@ import React, { useState } from "react";
 import {
   FlatList,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AddEditModal } from "@/components/AddEditModal";
 import { GameRow } from "@/components/GameRow";
+import { SettingsModal } from "@/components/SettingsModal";
 import { StatCard } from "@/components/StatCard";
 import { Game, useVFM } from "@/context/VFMContext";
 import { useColors } from "@/hooks/useColors";
@@ -22,8 +22,9 @@ type FilterType = "all" | "sale" | "purchase";
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { games, stats } = useVFM();
-  const [modalVisible, setModalVisible] = useState(false);
+  const { games, stats, lastSyncedAt } = useVFM();
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
   const [editGame, setEditGame] = useState<Game | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
   const [search, setSearch] = useState("");
@@ -42,13 +43,17 @@ export default function HomeScreen() {
 
   const handleEdit = (game: Game) => {
     setEditGame(game);
-    setModalVisible(true);
+    setAddModalVisible(true);
   };
 
   const handleAdd = () => {
     setEditGame(null);
-    setModalVisible(true);
+    setAddModalVisible(true);
   };
+
+  const syncLabel = lastSyncedAt
+    ? `Synced ${new Date(lastSyncedAt).toLocaleDateString()} ${new Date(lastSyncedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    : null;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -62,21 +67,35 @@ export default function HomeScreen() {
           },
         ]}
       >
-        <View>
+        <View style={styles.headerLeft}>
           <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
             Spring 2026
           </Text>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>
             BGG VFM Tracker
           </Text>
+          {syncLabel ? (
+            <Text style={[styles.syncLabel, { color: colors.mutedForeground }]}>
+              {syncLabel}
+            </Text>
+          ) : null}
         </View>
-        <TouchableOpacity
-          style={[styles.addBtn, { backgroundColor: colors.primary }]}
-          onPress={handleAdd}
-          activeOpacity={0.8}
-        >
-          <Feather name="plus" size={20} color={colors.primaryForeground} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
+            onPress={() => setSettingsVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Feather name="settings" size={18} color={colors.foreground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconBtn, { backgroundColor: colors.primary }]}
+            onPress={handleAdd}
+            activeOpacity={0.8}
+          >
+            <Feather name="plus" size={20} color={colors.primaryForeground} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -87,7 +106,7 @@ export default function HomeScreen() {
           { paddingBottom: bottomPad + 100 },
         ]}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={filtered.length > 0}
+        scrollEnabled={true}
         ListHeaderComponent={
           <>
             <View style={styles.statsGrid}>
@@ -123,83 +142,92 @@ export default function HomeScreen() {
               />
             </View>
 
-            <View
-              style={[
-                styles.searchBar,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Feather name="search" size={16} color={colors.mutedForeground} />
-              <TextInput
-                style={[styles.searchInput, { color: colors.foreground }]}
-                placeholder="Search games or users..."
-                placeholderTextColor={colors.mutedForeground}
-                value={search}
-                onChangeText={setSearch}
-              />
-              {search.length > 0 && (
-                <TouchableOpacity onPress={() => setSearch("")} hitSlop={8}>
-                  <Feather name="x-circle" size={16} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <View style={styles.filterRow}>
-              {(["all", "sale", "purchase"] as FilterType[]).map((f) => (
+            {games.length === 0 ? (
+              <View style={[styles.emptySync, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Feather name="refresh-cw" size={20} color={colors.accent} />
+                <Text style={[styles.emptySyncTitle, { color: colors.foreground }]}>
+                  Sync from BGG
+                </Text>
+                <Text style={[styles.emptySyncText, { color: colors.mutedForeground }]}>
+                  Tap the settings icon to connect your BGG account and import your VFM listings automatically.
+                </Text>
                 <TouchableOpacity
-                  key={f}
-                  style={[
-                    styles.filterChip,
-                    {
-                      backgroundColor:
-                        filter === f ? colors.primary : colors.secondary,
-                      borderColor:
-                        filter === f ? colors.primary : colors.border,
-                    },
-                  ]}
-                  onPress={() => setFilter(f)}
+                  style={[styles.emptySyncBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => setSettingsVisible(true)}
+                  activeOpacity={0.8}
                 >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      {
-                        color:
-                          filter === f
-                            ? colors.primaryForeground
-                            : colors.foreground,
-                      },
-                    ]}
-                  >
-                    {f === "all" ? "All" : f === "sale" ? "Sales" : "Purchases"}
+                  <Text style={[styles.emptySyncBtnText, { color: colors.primaryForeground }]}>
+                    Open Settings
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-
-            {filtered.length === 0 && (
-              <View style={styles.empty}>
-                <Feather
-                  name="package"
-                  size={40}
-                  color={colors.mutedForeground}
-                />
-                <Text
-                  style={[styles.emptyTitle, { color: colors.foreground }]}
-                >
-                  No entries yet
-                </Text>
-                <Text
+              </View>
+            ) : (
+              <>
+                <View
                   style={[
-                    styles.emptyText,
-                    { color: colors.mutedForeground },
+                    styles.searchBar,
+                    { backgroundColor: colors.card, borderColor: colors.border },
                   ]}
                 >
-                  Tap the + button to add your first game listing or purchase
-                </Text>
-              </View>
+                  <Feather name="search" size={16} color={colors.mutedForeground} />
+                  <TextInput
+                    style={[styles.searchInput, { color: colors.foreground }]}
+                    placeholder="Search games or users..."
+                    placeholderTextColor={colors.mutedForeground}
+                    value={search}
+                    onChangeText={setSearch}
+                  />
+                  {search.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearch("")} hitSlop={8}>
+                      <Feather name="x-circle" size={16} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={styles.filterRow}>
+                  {(["all", "sale", "purchase"] as FilterType[]).map((f) => (
+                    <TouchableOpacity
+                      key={f}
+                      style={[
+                        styles.filterChip,
+                        {
+                          backgroundColor:
+                            filter === f ? colors.primary : colors.secondary,
+                          borderColor:
+                            filter === f ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => setFilter(f)}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          {
+                            color:
+                              filter === f
+                                ? colors.primaryForeground
+                                : colors.foreground,
+                          },
+                        ]}
+                      >
+                        {f === "all" ? "All" : f === "sale" ? "Sales" : "Purchases"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {filtered.length === 0 && search.length > 0 && (
+                  <View style={styles.empty}>
+                    <Feather name="search" size={36} color={colors.mutedForeground} />
+                    <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                      No results
+                    </Text>
+                    <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                      No games matched your search
+                    </Text>
+                  </View>
+                )}
+              </>
             )}
           </>
         }
@@ -209,21 +237,25 @@ export default function HomeScreen() {
       />
 
       <AddEditModal
-        visible={modalVisible}
+        visible={addModalVisible}
         editGame={editGame}
         onClose={() => {
-          setModalVisible(false);
+          setAddModalVisible(false);
           setEditGame(null);
         }}
+      />
+
+      <SettingsModal
+        visible={settingsVisible}
+        onClose={() => setSettingsVisible(false)}
+        onSyncComplete={() => setSettingsVisible(false)}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -232,6 +264,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 1,
   },
+  headerLeft: { flex: 1 },
   headerSub: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
@@ -243,18 +276,53 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontFamily: "Inter_700Bold",
   },
-  addBtn: {
+  syncLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+  },
+  iconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
-  list: {
-    padding: 16,
+  list: { padding: 16 },
+  statsGrid: { marginBottom: 20 },
+  emptySync: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 20,
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
   },
-  statsGrid: {
-    marginBottom: 20,
+  emptySyncTitle: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    marginTop: 4,
+  },
+  emptySyncText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  emptySyncBtn: {
+    marginTop: 8,
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  emptySyncBtnText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
   },
   searchBar: {
     flexDirection: "row",
