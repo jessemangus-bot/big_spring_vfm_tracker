@@ -13,7 +13,7 @@ function sleep(ms: number) {
 
 async function fetchGeelist(listId: string, apiToken: string): Promise<string> {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const resp = await fetch(`${BGG_API_BASE}/${listId}`, {
+    const resp = await fetch(`${BGG_API_BASE}/${listId}?comments=1`, {
       headers: { Authorization: `Bearer ${apiToken}` },
     });
 
@@ -23,7 +23,6 @@ async function fetchGeelist(listId: string, apiToken: string): Promise<string> {
 
     const text = await resp.text();
 
-    // BGG queues requests and returns a message asking to retry
     if (text.includes("accepted and will be processed")) {
       await sleep(RETRY_DELAY_MS);
       continue;
@@ -42,11 +41,9 @@ function stripBBCode(text: string): string {
 }
 
 function parsePrice(item: any, body: string): number {
-  // Prefer the structured price attribute on the item element
   const attrPrice = parseFloat(item["@_price"]);
   if (!isNaN(attrPrice) && attrPrice > 0) return attrPrice;
 
-  // Fall back to text parsing — handles BIN: and FP: (Fixed Price) prefixes
   const patterns = [
     /(?:BIN|FP):\[\/B\]\s*\$?([\d.]+)/i,
     /(?:BIN|FP):\s*\$?([\d.]+)/i,
@@ -59,6 +56,11 @@ function parsePrice(item: any, body: string): number {
   return 0;
 }
 
+function parsePriceFromComment(text: string): number {
+  const m = text.match(/\$\s*([\d.]+)/);
+  return m ? parseFloat(m[1]) : 0;
+}
+
 function parseCondition(body: string): string | undefined {
   const m =
     body.match(/Condition:\[\/B\]\s*([^\n\[]+)/i) ||
@@ -68,12 +70,11 @@ function parseCondition(body: string): string | undefined {
 }
 
 function parseStatus(item: any, body: string): "listed" | "sold" | "withdrawn" {
-  // Prefer the structured sold="1" attribute
   if (item["@_sold"] === "1" || item["@_sold"] === 1) return "sold";
 
   const lower = body.toLowerCase();
   if (
-    lower.includes("sold to") ||   // handles "Sold to:" and "SOLD to"
+    lower.includes("sold to") ||
     lower.includes("[sold]") ||
     lower.includes("sale complete") ||
     lower.includes("this item has been sold")
@@ -87,30 +88,59 @@ function parseStatus(item: any, body: string): "listed" | "sold" | "withdrawn" {
 }
 
 function parseBuyer(body: string): string | undefined {
-  // Handles "Sold to:", "Sold to", "SOLD to:", "SOLD to" — colon optional
   const m = body.match(/[Ss][Oo][Ll][Dd]\s+to:?\s*.*?\[user=([^\]]+)\]/s);
   if (m) return m[1].trim();
   return undefined;
 }
 
-function parseSeller(body: string): string | undefined {
-  // For items the user bought — look for the poster's username reference
-  // (typically we already have it from the item's username attribute)
-  return undefined;
-}
-
-function parseType(body: string, objectname: string): "sale" | "purchase" {
-  const text = (body + " " + objectname).toLowerCase();
+function parseType(body: string): "sale" | "purchase" {
+  const lower = body.toLowerCase();
   if (
-    text.includes("wtb") ||
-    text.includes("want to buy") ||
-    text.includes("looking to buy") ||
-    text.includes("iso ") ||
-    text.includes("[wtb]")
+    lower.includes("wtb") ||
+    lower.includes("want to buy") ||
+    lower.includes("looking to buy") ||
+    lower.includes("iso ") ||
+    lower.includes("[wtb]")
   ) {
     return "purchase";
   }
   return "sale";
+}
+
+// Apostrophe variants: straight ('), curly right ('), curly left (')
+const APO = "['\u2018\u2019]";
+
+// Phrases in a comment that signal purchase intent
+const PURCHASE_INTENT_RE = new RegExp(
+  `\\bi${APO}?ll\\s+take\\s+(this|it|them|all|the\\s+lot)\\b|\\bmine\\b|\\bdibs\\b|\\bi\\s+will\\s+take\\s+(this|it|them)\\b`,
+  "i"
+);
+
+// Phrases that explicitly cancel / withdraw interest
+const CANCELLED_RE = new RegExp(
+  `\\bi${APO}?(?:ll| will)\\s+pass\\b|\\bno\\s+longer\\s+interested\\b|\\bnevermind\\b|\\bnever\\s+mind\\b|\\bno\\s+thanks\\b|\\bi\\s+will\\s+pass\\b`,
+  "i"
+);
+
+// Seller confirmation phrases in comments
+const SELLER_CONFIRMED_RE = new RegExp(
+  `\\bsold\\b|\\bsounds\\s+good\\b|\\bit${APO}?s?\\s+yours\\b|\\byou${APO}?re\\s+next\\b|\\byou\\s+got\\s+it\\b`,
+  "i"
+);
+
+interface ParsedComment {
+  username: string;
+  text: string;
+}
+
+function getComments(item: any): ParsedComment[] {
+  const raw = item.comment;
+  if (!raw) return [];
+  const arr = Array.isArray(raw) ? raw : [raw];
+  return arr.map((c: any) => ({
+    username: (c["@_username"] ?? "").toLowerCase(),
+    text: typeof c === "string" ? c : (c["#text"] ?? c._ ?? String(c)),
+  }));
 }
 
 interface ParsedItem {
@@ -125,7 +155,7 @@ interface ParsedItem {
 }
 
 router.get("/bgg/geeklist", async (req, res) => {
-  const { listId, username, apiToken } = req.query as Record<string, string>;
+  const { listId, username, apiToken, realName } = req.query as Record<string, string>;
 
   if (!listId || !username || !apiToken) {
     res.status(400).json({ error: "listId, username, and apiToken are required" });
@@ -138,7 +168,7 @@ router.get("/bgg/geeklist", async (req, res) => {
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: "@_",
-      isArray: (name) => name === "item",
+      isArray: (name) => name === "item" || name === "comment",
     });
     const parsed = parser.parse(xml);
 
@@ -151,6 +181,7 @@ router.get("/bgg/geeklist", async (req, res) => {
     const listTitle: string = geeklist.title ?? "BGG Geeklist";
     const rawItems: any[] = geeklist.item ?? [];
     const usernameLower = username.toLowerCase();
+    const realNameLower = (realName ?? "").trim().toLowerCase();
 
     const items: ParsedItem[] = [];
 
@@ -158,10 +189,11 @@ router.get("/bgg/geeklist", async (req, res) => {
       const itemUsername: string = (item["@_username"] ?? "").toLowerCase();
       const body: string = item.body ?? "";
       const objectname: string = item["@_objectname"] ?? "Unknown Game";
+      const comments = getComments(item);
 
-      // Case 1: Items posted BY the user — these are their sale listings
+      // ── Case 1: Items posted BY the user (their own sale listings) ──────────
       if (itemUsername === usernameLower) {
-        const type = parseType(body, objectname);
+        const type = parseType(body);
         const status = parseStatus(item, body);
         const buyer = parseBuyer(body);
 
@@ -173,26 +205,84 @@ router.get("/bgg/geeklist", async (req, res) => {
           status,
           buyerSeller: buyer,
           condition: parseCondition(body),
-          notes: undefined,
         });
         continue;
       }
 
-      // Case 2: Items posted by OTHERS where the user appears as the buyer
-      // Check the body for "Sold to [user=TARGET]" — this is a purchase by our user
-      const buyerMatch = body.match(/[Ss][Oo][Ll][Dd]\s+to:?\s*.*?\[user=([^\]]+)\]/s);
-      if (buyerMatch && buyerMatch[1].trim().toLowerCase() === usernameLower) {
+      // ── Case 2: Items by others where the user appears as buyer ──────────────
+
+      // 2a: BGG [user=] tag in body
+      const userTagMatch = body.match(
+        /[Ss][Oo][Ll][Dd]\s+to:?\s*.*?\[user=([^\]]+)\]/s
+      );
+      if (userTagMatch && userTagMatch[1].trim().toLowerCase() === usernameLower) {
         items.push({
           id: String(item["@_id"] ?? Math.random()),
           gameTitle: objectname,
           price: parsePrice(item, body),
           type: "purchase",
-          status: "sold", // it's listed as sold in the geeklist = we completed the purchase
-          buyerSeller: item["@_username"], // the seller
+          status: "sold",
+          buyerSeller: item["@_username"],
           condition: parseCondition(body),
-          notes: undefined,
         });
+        continue;
       }
+
+      // 2b: Seller typed the real name instead of a BGG tag
+      if (
+        realNameLower.length > 0 &&
+        body.toLowerCase().includes("sold") &&
+        body.toLowerCase().includes(realNameLower)
+      ) {
+        items.push({
+          id: String(item["@_id"] ?? Math.random()),
+          gameTitle: objectname,
+          price: parsePrice(item, body),
+          type: "purchase",
+          status: "sold",
+          buyerSeller: item["@_username"],
+          condition: parseCondition(body),
+        });
+        continue;
+      }
+
+      // ── Case 3: Comments — user said "I'll take this" and wasn't cancelled ──
+      const userComments = comments.filter((c) => c.username === usernameLower);
+      if (userComments.length === 0) continue;
+
+      const hasPurchaseIntent = userComments.some((c) =>
+        PURCHASE_INTENT_RE.test(c.text)
+      );
+      if (!hasPurchaseIntent) continue;
+
+      // Check if user explicitly cancelled after showing intent
+      const lastUserComment = userComments[userComments.length - 1];
+      if (CANCELLED_RE.test(lastUserComment.text)) continue;
+
+      // Check for confirmation: sold attribute OR seller said "Sold" / "Sounds good"
+      const isSoldByAttr =
+        item["@_sold"] === "1" || item["@_sold"] === 1;
+      const otherComments = comments.filter((c) => c.username !== usernameLower);
+      const sellerConfirmed = otherComments.some((c) =>
+        SELLER_CONFIRMED_RE.test(c.text)
+      );
+
+      if (!isSoldByAttr && !sellerConfirmed) continue;
+
+      // Try to get price from the user's purchase-intent comment first
+      const intentComment = userComments.find((c) => PURCHASE_INTENT_RE.test(c.text));
+      const commentPrice = intentComment ? parsePriceFromComment(intentComment.text) : 0;
+      const finalPrice = commentPrice > 0 ? commentPrice : parsePrice(item, body);
+
+      items.push({
+        id: String(item["@_id"] ?? Math.random()),
+        gameTitle: objectname,
+        price: finalPrice,
+        type: "purchase",
+        status: "sold",
+        buyerSeller: item["@_username"],
+        condition: parseCondition(body),
+      });
     }
 
     res.json({

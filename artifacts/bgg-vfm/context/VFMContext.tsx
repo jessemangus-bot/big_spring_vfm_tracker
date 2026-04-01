@@ -29,6 +29,7 @@ export interface BggSettings {
   geeklistUrl: string;
   username: string;
   apiToken: string;
+  realName: string;
 }
 
 interface VFMContextValue {
@@ -60,6 +61,7 @@ const DEFAULT_SETTINGS: BggSettings = {
   geeklistUrl: "",
   username: "",
   apiToken: "",
+  realName: "",
 };
 
 export function VFMProvider({ children }: { children: React.ReactNode }) {

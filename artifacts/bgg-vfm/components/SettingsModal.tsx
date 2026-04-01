@@ -36,6 +36,7 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
 
   const [geeklistUrl, setGeeklistUrl] = useState("");
   const [username, setUsername] = useState("");
+  const [realName, setRealName] = useState("");
   const [apiToken, setApiToken] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
@@ -44,6 +45,7 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
     if (visible) {
       setGeeklistUrl(bggSettings.geeklistUrl);
       setUsername(bggSettings.username);
+      setRealName(bggSettings.realName ?? "");
       setApiToken(bggSettings.apiToken);
       setSyncStatus(null);
     }
@@ -53,6 +55,7 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
     const s: BggSettings = {
       geeklistUrl: geeklistUrl.trim(),
       username: username.trim(),
+      realName: realName.trim(),
       apiToken: apiToken.trim(),
     };
     saveBggSettings(s);
@@ -73,15 +76,20 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
       return;
     }
 
-    // Save settings first
     handleSave();
     setSyncing(true);
     setSyncStatus("Connecting to BGG...");
 
     try {
       const base = getBaseUrl();
-      const url = `${base}/api/bgg/geeklist?listId=${listId}&username=${encodeURIComponent(username.trim())}&apiToken=${encodeURIComponent(apiToken.trim())}`;
-      const resp = await fetch(url);
+      const params = new URLSearchParams({
+        listId,
+        username: username.trim(),
+        apiToken: apiToken.trim(),
+      });
+      if (realName.trim()) params.set("realName", realName.trim());
+
+      const resp = await fetch(`${base}/api/bgg/geeklist?${params.toString()}`);
 
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({ error: "Unknown error" }));
@@ -93,7 +101,6 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
 
       setSyncStatus(`Parsing ${totalItems} geeklist items...`);
 
-      // Map API response to Game objects
       const games = items.map((item: any) => ({
         id: `bgg_${item.id}`,
         title: item.gameTitle,
@@ -109,8 +116,10 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
       replaceBggGames(games);
       setLastSyncedAt(new Date().toISOString());
 
+      const purchases = games.filter((g: any) => g.type === "purchase").length;
+      const sales = games.filter((g: any) => g.type === "sale").length;
       setSyncStatus(
-        `Synced ${games.length} of your items from "${listTitle}"`
+        `Synced from "${listTitle}": ${sales} sale listing${sales !== 1 ? "s" : ""}, ${purchases} purchase${purchases !== 1 ? "s" : ""}`
       );
       onSyncComplete();
     } catch (err: any) {
@@ -202,6 +211,29 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
             autoCapitalize="none"
             autoCorrect={false}
           />
+
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+            YOUR REAL NAME
+          </Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                color: colors.foreground,
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+            value={realName}
+            onChangeText={setRealName}
+            placeholder="First Last (optional)"
+            placeholderTextColor={colors.mutedForeground}
+            autoCapitalize="words"
+            autoCorrect={false}
+          />
+          <Text style={[styles.fieldHint, { color: colors.mutedForeground }]}>
+            Used to detect purchases when a seller types your name instead of your BGG username.
+          </Text>
 
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
             BGG API TOKEN
@@ -319,6 +351,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     fontFamily: "Inter_400Regular",
+  },
+  fieldHint: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 16,
+    marginTop: 6,
   },
   syncSection: {
     marginTop: 28,
