@@ -41,11 +41,15 @@ function stripBBCode(text: string): string {
     .trim();
 }
 
-function parsePrice(body: string): number {
-  // Match BIN: $XX or BIN: XX (with or without BBCode tags)
+function parsePrice(item: any, body: string): number {
+  // Prefer the structured price attribute on the item element
+  const attrPrice = parseFloat(item["@_price"]);
+  if (!isNaN(attrPrice) && attrPrice > 0) return attrPrice;
+
+  // Fall back to text parsing — handles BIN: and FP: (Fixed Price) prefixes
   const patterns = [
-    /BIN:\[\/B\]\s*\$?([\d.]+)/i,
-    /BIN:\s*\$?([\d.]+)/i,
+    /(?:BIN|FP):\[\/B\]\s*\$?([\d.]+)/i,
+    /(?:BIN|FP):\s*\$?([\d.]+)/i,
     /\$\s*([\d.]+)/,
   ];
   for (const pat of patterns) {
@@ -56,16 +60,20 @@ function parsePrice(body: string): number {
 }
 
 function parseCondition(body: string): string | undefined {
-  const m = body.match(/Condition:\[\/B\]\s*([^\n\[]+)/i) ||
-             body.match(/Condition:\s*([^\n\[]+)/i);
+  const m =
+    body.match(/Condition:\[\/B\]\s*([^\n\[]+)/i) ||
+    body.match(/Condition:\s*([^\n\[]+)/i);
   if (m) return stripBBCode(m[1]).trim();
   return undefined;
 }
 
-function parseStatus(body: string): "listed" | "sold" | "withdrawn" {
+function parseStatus(item: any, body: string): "listed" | "sold" | "withdrawn" {
+  // Prefer the structured sold="1" attribute
+  if (item["@_sold"] === "1" || item["@_sold"] === 1) return "sold";
+
   const lower = body.toLowerCase();
   if (
-    lower.includes("sold to:") ||
+    lower.includes("sold to") ||   // handles "Sold to:" and "SOLD to"
     lower.includes("[sold]") ||
     lower.includes("sale complete") ||
     lower.includes("this item has been sold")
@@ -79,8 +87,15 @@ function parseStatus(body: string): "listed" | "sold" | "withdrawn" {
 }
 
 function parseBuyer(body: string): string | undefined {
-  const m = body.match(/[Ss]old to:.*?\[user=([^\]]+)\]/s);
+  // Handles "Sold to:", "Sold to", "SOLD to:", "SOLD to" — colon optional
+  const m = body.match(/[Ss][Oo][Ll][Dd]\s+to:?\s*.*?\[user=([^\]]+)\]/s);
   if (m) return m[1].trim();
+  return undefined;
+}
+
+function parseSeller(body: string): string | undefined {
+  // For items the user bought — look for the poster's username reference
+  // (typically we already have it from the item's username attribute)
   return undefined;
 }
 
@@ -134,31 +149,51 @@ router.get("/bgg/geeklist", async (req, res) => {
     }
 
     const listTitle: string = geeklist.title ?? "BGG Geeklist";
-    const rawItems = geeklist.item ?? [];
+    const rawItems: any[] = geeklist.item ?? [];
+    const usernameLower = username.toLowerCase();
 
-    const items: ParsedItem[] = rawItems
-      .filter((item: any) => {
-        const itemUsername: string = item["@_username"] ?? "";
-        return itemUsername.toLowerCase() === username.toLowerCase();
-      })
-      .map((item: any) => {
-        const body: string = item.body ?? "";
-        const objectname: string = item["@_objectname"] ?? "Unknown Game";
+    const items: ParsedItem[] = [];
+
+    for (const item of rawItems) {
+      const itemUsername: string = (item["@_username"] ?? "").toLowerCase();
+      const body: string = item.body ?? "";
+      const objectname: string = item["@_objectname"] ?? "Unknown Game";
+
+      // Case 1: Items posted BY the user — these are their sale listings
+      if (itemUsername === usernameLower) {
         const type = parseType(body, objectname);
-        const status = parseStatus(body);
+        const status = parseStatus(item, body);
         const buyer = parseBuyer(body);
 
-        return {
+        items.push({
           id: String(item["@_id"] ?? Math.random()),
           gameTitle: objectname,
-          price: parsePrice(body),
+          price: parsePrice(item, body),
           type,
-          status: status as ParsedItem["status"],
+          status,
           buyerSeller: buyer,
           condition: parseCondition(body),
           notes: undefined,
-        };
-      });
+        });
+        continue;
+      }
+
+      // Case 2: Items posted by OTHERS where the user appears as the buyer
+      // Check the body for "Sold to [user=TARGET]" — this is a purchase by our user
+      const buyerMatch = body.match(/[Ss][Oo][Ll][Dd]\s+to:?\s*.*?\[user=([^\]]+)\]/s);
+      if (buyerMatch && buyerMatch[1].trim().toLowerCase() === usernameLower) {
+        items.push({
+          id: String(item["@_id"] ?? Math.random()),
+          gameTitle: objectname,
+          price: parsePrice(item, body),
+          type: "purchase",
+          status: "sold", // it's listed as sold in the geeklist = we completed the purchase
+          buyerSeller: item["@_username"], // the seller
+          condition: parseCondition(body),
+          notes: undefined,
+        });
+      }
+    }
 
     res.json({
       listTitle,
