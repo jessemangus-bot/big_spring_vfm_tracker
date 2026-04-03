@@ -39,6 +39,10 @@ export interface SyncResult {
   listTitle: string;
 }
 
+const EMBEDDED_API_TOKEN = "3cd22331-ee90-4ffe-ad01-72ed27320244";
+const DEFAULT_GEEKLIST_URL =
+  "https://boardgamegeek.com/geeklist/375812/bgg-spring-2026-virtual-flea-market-vfm";
+
 function extractListId(url: string): string | null {
   const m = url.match(/geeklist\/(\d+)/);
   return m ? m[1] : null;
@@ -72,7 +76,7 @@ const SETTINGS_KEY = "bgg_vfm_settings_v1";
 const SYNC_KEY = "bgg_vfm_last_synced";
 
 const DEFAULT_SETTINGS: BggSettings = {
-  geeklistUrl: "",
+  geeklistUrl: DEFAULT_GEEKLIST_URL,
   username: "",
   apiToken: "",
   realName: "",
@@ -187,14 +191,13 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
 
       if (!listId) throw new Error("No geeklist ID found in the saved URL. Open settings to configure.");
       if (!settings.username) throw new Error("No BGG username saved. Open settings to configure.");
-      if (!settings.apiToken) throw new Error("No API token saved. Open settings to configure.");
 
       setIsSyncing(true);
       try {
         const params = new URLSearchParams({
           listId,
           username: settings.username,
-          apiToken: settings.apiToken,
+          apiToken: EMBEDDED_API_TOKEN,
         });
         if (settings.realName) params.set("realName", settings.realName);
 

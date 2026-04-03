@@ -1,6 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Platform,
   StyleSheet,
@@ -22,7 +24,7 @@ type FilterType = "all" | "listed" | "sold" | "purchase";
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { games, stats, lastSyncedAt } = useVFM();
+  const { games, stats, lastSyncedAt, syncFromBgg, isSyncing, bggSettings } = useVFM();
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [editGame, setEditGame] = useState<Game | null>(null);
@@ -52,6 +54,18 @@ export default function HomeScreen() {
   const handleAdd = () => {
     setEditGame(null);
     setAddModalVisible(true);
+  };
+
+  const handleRefresh = async () => {
+    if (!bggSettings.username) {
+      setSettingsVisible(true);
+      return;
+    }
+    try {
+      await syncFromBgg();
+    } catch (err: any) {
+      Alert.alert("Sync Failed", err.message ?? "Could not sync from BGG.");
+    }
   };
 
   const syncLabel = lastSyncedAt
@@ -90,6 +104,18 @@ export default function HomeScreen() {
             activeOpacity={0.8}
           >
             <Feather name="settings" size={18} color={colors.foreground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconBtn, { backgroundColor: colors.secondary, opacity: isSyncing ? 0.5 : 1 }]}
+            onPress={handleRefresh}
+            disabled={isSyncing}
+            activeOpacity={0.8}
+          >
+            {isSyncing ? (
+              <ActivityIndicator size="small" color={colors.foreground} />
+            ) : (
+              <Feather name="refresh-cw" size={18} color={colors.foreground} />
+            )}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.iconBtn, { backgroundColor: colors.primary }]}

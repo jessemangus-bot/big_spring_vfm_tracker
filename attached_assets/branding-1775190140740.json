@@ -1,0 +1,123 @@
+{
+  "colorScheme": "light",
+  "fonts": [
+    {
+      "family": "Proxima Nova",
+      "role": "body"
+    },
+    {
+      "family": "Arial",
+      "role": "body"
+    },
+    {
+      "family": "Roboto",
+      "role": "body"
+    },
+    {
+      "family": "Helvetica",
+      "role": "body"
+    },
+    {
+      "family": "Segoe UI",
+      "role": "body"
+    }
+  ],
+  "colors": {
+    "primary": "#005BCA",
+    "secondary": "#878F96",
+    "accent": "#3F3A60",
+    "background": "#E7E7EA",
+    "textPrimary": "#000000",
+    "link": "#3F3A60"
+  },
+  "typography": {
+    "fontFamilies": {
+      "primary": "Proxima Nova",
+      "heading": "Proxima Nova"
+    },
+    "fontStacks": {
+      "heading": [
+        "proxima-nova",
+        "Arial",
+        "sans-serif"
+      ],
+      "body": [
+        "proxima-nova",
+        "Arial",
+        "sans-serif"
+      ],
+      "paragraph": [
+        "proxima-nova",
+        "Arial",
+        "sans-serif"
+      ]
+    },
+    "fontSizes": {
+      "h1": "28px",
+      "h2": "12px",
+      "body": "11px"
+    }
+  },
+  "spacing": {
+    "baseUnit": 4,
+    "borderRadius": "4px"
+  },
+  "components": {
+    "input": {
+      "background": "#FFFFFF",
+      "textColor": "#000000",
+      "borderColor": null,
+      "borderRadius": "9999px",
+      "borderRadiusCorners": {
+        "topLeft": "9999px",
+        "topRight": "9999px",
+        "bottomRight": "9999px",
+        "bottomLeft": "9999px"
+      },
+      "shadow": "none"
+    }
+  },
+  "images": {
+    "logo": "https://cf.geekdo-static.com/images/logos/navbar-logo-bgg-b2.svg",
+    "favicon": "https://cf.geekdo-static.com/icons/touch-icon180.png",
+    "ogImage": "https://cf.geekdo-images.com/Q7iNHn22im2egtRGL0ofYw__opengraph_letterbox/img/WLI2-MLe22nvSaLMm2LgovIrrSg=/fit-in/1200x630/filters:fill(auto):strip_icc()/pic6241493.jpg",
+    "logoHref": "File saved at: attached_assets/logoHref.html",
+    "logoAlt": "boardgame geek logo"
+  },
+  "__llm_logo_reasoning": {
+    "selectedIndex": 0,
+    "reasoning": "Selected #0 because it is visible, medium-sized, located in the header, links to the homepage, and the alt text matches the brand 'BoardGameGeek'.",
+    "confidence": 0.95,
+    "source": "llm"
+  },
+  "personality": {
+    "tone": "playful",
+    "energy": "medium",
+    "targetAudience": "board game enthusiasts"
+  },
+  "designSystem": {
+    "framework": "custom",
+    "componentLibrary": ""
+  },
+  "confidence": {
+    "buttons": 0.5,
+    "colors": 0.9,
+    "overall": 0.7
+  },
+  "__llm_metadata": {
+    "logoSelection": {
+      "llmCalled": true,
+      "llmSucceeded": true,
+      "finalSource": "llm",
+      "rawLogoSelection": {
+        "selectedLogoIndex": 0,
+        "selectedLogoReasoning": "Selected #0 because it is visible, medium-sized, located in the header, links to the homepage, and the alt text matches the brand 'BoardGameGeek'.",
+        "confidence": 0.95
+      }
+    },
+    "buttonClassification": {
+      "llmCalled": false,
+      "llmSucceeded": true
+    }
+  }
+}

@@ -11,17 +11,10 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { BggSettings, useVFM } from "@/context/VFMContext";
-import { getBaseUrl } from "@workspace/api-client-react";
-
-function extractListId(url: string): string | null {
-  const m = url.match(/geeklist\/(\d+)/);
-  return m ? m[1] : null;
-}
 
 interface SettingsModalProps {
   visible: boolean;
@@ -32,108 +25,55 @@ interface SettingsModalProps {
 export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModalProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { bggSettings, saveBggSettings, replaceBggGames, setLastSyncedAt } = useVFM();
+  const { bggSettings, saveBggSettings, syncFromBgg, isSyncing } = useVFM();
 
   const [geeklistUrl, setGeeklistUrl] = useState("");
   const [username, setUsername] = useState("");
   const [realName, setRealName] = useState("");
-  const [apiToken, setApiToken] = useState("");
-  const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) {
       setGeeklistUrl(bggSettings.geeklistUrl);
       setUsername(bggSettings.username);
       setRealName(bggSettings.realName ?? "");
-      setApiToken(bggSettings.apiToken);
       setSyncStatus(null);
+      setSyncError(null);
     }
   }, [visible, bggSettings]);
 
+  const buildSettings = (): BggSettings => ({
+    geeklistUrl: geeklistUrl.trim(),
+    username: username.trim(),
+    realName: realName.trim(),
+    apiToken: "",
+  });
+
   const handleSave = () => {
-    const s: BggSettings = {
-      geeklistUrl: geeklistUrl.trim(),
-      username: username.trim(),
-      realName: realName.trim(),
-      apiToken: apiToken.trim(),
-    };
-    saveBggSettings(s);
+    saveBggSettings(buildSettings());
   };
 
   const handleSync = async () => {
-    const listId = extractListId(geeklistUrl.trim());
-    if (!listId) {
-      Alert.alert("Invalid URL", "Could not find a geeklist ID in that URL.");
-      return;
-    }
-    if (!username.trim()) {
-      Alert.alert("Missing Username", "Please enter your BGG username.");
-      return;
-    }
-    if (!apiToken.trim()) {
-      Alert.alert("Missing API Token", "Please enter your BGG API token.");
-      return;
-    }
-
-    handleSave();
-    setSyncing(true);
+    const settings = buildSettings();
+    saveBggSettings(settings);
     setSyncStatus("Connecting to BGG...");
+    setSyncError(null);
 
     try {
-      const base = getBaseUrl();
-      const params = new URLSearchParams({
-        listId,
-        username: username.trim(),
-        apiToken: apiToken.trim(),
-      });
-      if (realName.trim()) params.set("realName", realName.trim());
-
-      const resp = await fetch(`${base}/api/bgg/geeklist?${params.toString()}`);
-
-      if (!resp.ok) {
-        const body = await resp.json().catch(() => ({ error: "Unknown error" }));
-        throw new Error(body.error ?? `HTTP ${resp.status}`);
-      }
-
-      const data = await resp.json();
-      const { items, listTitle, totalItems } = data;
-
-      setSyncStatus(`Parsing ${totalItems} geeklist items...`);
-
-      const games = items.map((item: any) => ({
-        id: `bgg_${item.id}`,
-        title: item.gameTitle,
-        price: item.price ?? 0,
-        type: item.type,
-        status: item.status,
-        buyerSeller: item.buyerSeller,
-        condition: item.condition,
-        notes: item.notes,
-        source: "bgg" as const,
-      }));
-
-      replaceBggGames(games);
-      setLastSyncedAt(new Date().toISOString());
-
-      const purchases = games.filter((g: any) => g.type === "purchase").length;
-      const sales = games.filter((g: any) => g.type === "sale").length;
+      const result = await syncFromBgg(settings);
       setSyncStatus(
-        `Synced from "${listTitle}": ${sales} sale listing${sales !== 1 ? "s" : ""}, ${purchases} purchase${purchases !== 1 ? "s" : ""}`
+        `Synced: ${result.sales} listing${result.sales !== 1 ? "s" : ""}, ${result.purchases} purchase${result.purchases !== 1 ? "s" : ""}`
       );
       onSyncComplete();
     } catch (err: any) {
       setSyncStatus(null);
-      Alert.alert("Sync Failed", err.message ?? "Could not fetch the geeklist.");
-    } finally {
-      setSyncing(false);
+      setSyncError(err.message ?? "Could not fetch the geeklist.");
     }
   };
 
-  const isConfigured =
-    geeklistUrl.trim().length > 0 &&
-    username.trim().length > 0 &&
-    apiToken.trim().length > 0;
+  const isConfigured = geeklistUrl.trim().length > 0 && username.trim().length > 0;
+  const canSync = isConfigured && !isSyncing;
 
   return (
     <Modal
@@ -185,7 +125,7 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
             ]}
             value={geeklistUrl}
             onChangeText={setGeeklistUrl}
-            placeholder="https://boardgamegeek.com/geeklist/375812/..."
+            placeholder="https://boardgamegeek.com/geeklist/..."
             placeholderTextColor={colors.mutedForeground}
             autoCapitalize="none"
             autoCorrect={false}
@@ -235,58 +175,35 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
             Used to detect purchases when a seller types your name instead of your BGG username.
           </Text>
 
-          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-            BGG API TOKEN
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                color: colors.foreground,
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-              },
-            ]}
-            value={apiToken}
-            onChangeText={setApiToken}
-            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-            placeholderTextColor={colors.mutedForeground}
-            autoCapitalize="none"
-            autoCorrect={false}
-            secureTextEntry={false}
-          />
-
           <View style={styles.syncSection}>
             <TouchableOpacity
               style={[
                 styles.syncBtn,
                 {
-                  backgroundColor: isConfigured
-                    ? colors.primary
-                    : colors.muted,
-                  opacity: syncing ? 0.7 : 1,
+                  backgroundColor: canSync ? colors.primary : colors.muted,
+                  opacity: isSyncing ? 0.7 : 1,
                 },
               ]}
               onPress={handleSync}
-              disabled={!isConfigured || syncing}
+              disabled={!canSync}
               activeOpacity={0.8}
             >
-              {syncing ? (
+              {isSyncing ? (
                 <ActivityIndicator color={colors.primaryForeground} size="small" />
               ) : (
-                <Feather name="refresh-cw" size={18} color={isConfigured ? colors.primaryForeground : colors.mutedForeground} />
+                <Feather
+                  name="refresh-cw"
+                  size={18}
+                  color={canSync ? colors.primaryForeground : colors.mutedForeground}
+                />
               )}
               <Text
                 style={[
                   styles.syncBtnText,
-                  {
-                    color: isConfigured
-                      ? colors.primaryForeground
-                      : colors.mutedForeground,
-                  },
+                  { color: canSync ? colors.primaryForeground : colors.mutedForeground },
                 ]}
               >
-                {syncing ? "Syncing..." : "Sync from BGG"}
+                {isSyncing ? "Syncing..." : "Sync from BGG"}
               </Text>
             </TouchableOpacity>
 
@@ -304,9 +221,22 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
               </View>
             ) : null}
 
+            {syncError ? (
+              <View
+                style={[
+                  styles.statusBox,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                <Feather name="alert-circle" size={16} color={colors.destructive} />
+                <Text style={[styles.statusText, { color: colors.foreground }]}>
+                  {syncError}
+                </Text>
+              </View>
+            ) : null}
+
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-              Syncing will replace all BGG-sourced items with the latest data.
-              Manually added items are never affected.
+              Syncing replaces all BGG-sourced items with the latest data. Manually added items are never affected.
             </Text>
           </View>
 
