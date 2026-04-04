@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -244,6 +245,35 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
             </Text>
           </View>
 
+          <View style={styles.donationSection}>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+              SUPPORT DEVELOPMENT
+            </Text>
+            <Text style={[styles.donationMessage, { color: colors.mutedForeground }]}>
+              If you find this app useful, consider buying the developer a coffee!
+            </Text>
+            <TouchableOpacity
+              style={[styles.donationBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => Linking.openURL("https://paypal.me/jessemangus")}
+              activeOpacity={0.7}
+            >
+              <Feather name="dollar-sign" size={18} color={colors.foreground} />
+              <Text style={[styles.donationBtnText, { color: colors.foreground }]}>
+                Donate via PayPal
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.donationBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => Linking.openURL("https://venmo.com/JesseMangus")}
+              activeOpacity={0.7}
+            >
+              <Feather name="credit-card" size={18} color={colors.foreground} />
+              <Text style={[styles.donationBtnText, { color: colors.foreground }]}>
+                Donate via Venmo
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={{ height: insets.bottom + 32 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -326,5 +356,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     lineHeight: 17,
+  },
+  donationSection: {
+    marginTop: 28,
+    gap: 12,
+  },
+  donationMessage: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  donationBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  donationBtnText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
   },
 });
