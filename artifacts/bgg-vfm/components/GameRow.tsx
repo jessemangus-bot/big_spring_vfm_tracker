@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { Game, useVFM } from "@/context/VFMContext";
 
@@ -41,7 +41,13 @@ export function GameRow({ game, onEdit }: GameRowProps) {
       : colors.mutedForeground;
 
   const badgeIcon: React.ComponentProps<typeof Feather>["name"] =
-    isWinning ? "trending-up" : isOutbid ? "trending-down" : game.type === "purchase" ? "shopping-bag" : "tag";
+    isWinning
+      ? "trending-up"
+      : isOutbid
+      ? "trending-down"
+      : game.type === "purchase"
+      ? "shopping-bag"
+      : "tag";
 
   const handleDelete = () => {
     Alert.alert("Delete Entry", `Remove "${game.title}"?`, [
@@ -54,39 +60,89 @@ export function GameRow({ game, onEdit }: GameRowProps) {
     ]);
   };
 
-  const priceLabel = isAuction ? `Bid: $${game.price.toFixed(2)}` : `$${game.price.toFixed(2)}`;
+  const handleOpenBgg = () => {
+    if (game.bggUrl) {
+      Linking.openURL(game.bggUrl).catch(() => {
+        Alert.alert("Could not open link", game.bggUrl);
+      });
+    }
+  };
+
+  const priceLabel = isAuction
+    ? `Bid: $${game.price.toFixed(2)}`
+    : `$${game.price.toFixed(2)}`;
+
+  const rowBorderColor = isOutbid
+    ? colors.destructive + "40"
+    : colors.border;
 
   return (
-    <View style={[styles.row, { backgroundColor: colors.card, borderColor: isOutbid ? colors.destructive + "40" : colors.border }]}>
-      <View style={[styles.typeBadge, { backgroundColor: typeColor + "20" }]}>
-        <Feather name={badgeIcon} size={14} color={typeColor} />
-      </View>
-      <View style={styles.info}>
-        <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
-          {game.title}
-        </Text>
-        <View style={styles.meta}>
-          {isAuction ? (
-            <Text style={[styles.status, { color: typeColor }]}>
-              {isWinning ? "Winning" : "Outbid"}
-            </Text>
-          ) : game.type === "sale" ? (
-            <Text style={[styles.status, { color: statusColor }]}>
-              {STATUS_LABELS[game.status]}
-            </Text>
-          ) : (
-            <Text style={[styles.status, { color: typeColor }]}>Purchase</Text>
-          )}
-          {game.buyerSeller ? (
-            <Text style={[styles.person, { color: colors.mutedForeground }]}>
-              · {game.buyerSeller}
-            </Text>
-          ) : null}
+    <View
+      style={[
+        styles.row,
+        { backgroundColor: colors.card, borderColor: rowBorderColor },
+      ]}
+    >
+      <TouchableOpacity
+        style={styles.mainContent}
+        onPress={game.bggUrl ? handleOpenBgg : undefined}
+        activeOpacity={game.bggUrl ? 0.65 : 1}
+        disabled={!game.bggUrl}
+      >
+        <View style={[styles.typeBadge, { backgroundColor: typeColor + "20" }]}>
+          <Feather name={badgeIcon} size={14} color={typeColor} />
         </View>
-      </View>
-      <Text style={[styles.price, { color: isAuction ? typeColor : colors.foreground }]}>
-        {priceLabel}
-      </Text>
+        <View style={styles.info}>
+          <View style={styles.titleRow}>
+            <Text
+              style={[styles.title, { color: colors.foreground }]}
+              numberOfLines={1}
+            >
+              {game.title}
+            </Text>
+            {game.bggUrl ? (
+              <Feather
+                name="external-link"
+                size={11}
+                color={colors.mutedForeground}
+                style={styles.linkIcon}
+              />
+            ) : null}
+          </View>
+          <View style={styles.meta}>
+            {isAuction ? (
+              <Text style={[styles.status, { color: typeColor }]}>
+                {isWinning ? "Winning" : "Outbid"}
+              </Text>
+            ) : game.type === "sale" ? (
+              <Text style={[styles.status, { color: statusColor }]}>
+                {STATUS_LABELS[game.status]}
+              </Text>
+            ) : (
+              <Text style={[styles.status, { color: typeColor }]}>
+                Purchase
+              </Text>
+            )}
+            {game.buyerSeller ? (
+              <Text
+                style={[styles.person, { color: colors.mutedForeground }]}
+                numberOfLines={1}
+              >
+                · {game.buyerSeller}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+        <Text
+          style={[
+            styles.price,
+            { color: isAuction ? typeColor : colors.foreground },
+          ]}
+        >
+          {priceLabel}
+        </Text>
+      </TouchableOpacity>
+
       <TouchableOpacity style={styles.iconBtn} onPress={() => onEdit(game)} hitSlop={8}>
         <Feather name="edit-2" size={16} color={colors.mutedForeground} />
       </TouchableOpacity>
@@ -103,10 +159,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 10,
     borderWidth: 1,
-    paddingHorizontal: 12,
+    paddingRight: 8,
     paddingVertical: 10,
     marginBottom: 8,
+    gap: 4,
+  },
+  mainContent: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
+    paddingLeft: 12,
+    paddingRight: 4,
   },
   typeBadge: {
     width: 32,
@@ -114,14 +178,24 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
   info: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 2,
+  },
   title: {
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
-    marginBottom: 2,
+    flexShrink: 1,
+  },
+  linkIcon: {
+    flexShrink: 0,
   },
   meta: {
     flexDirection: "row",
@@ -134,14 +208,16 @@ const styles = StyleSheet.create({
   person: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
+    flexShrink: 1,
   },
   price: {
     fontSize: 13,
     fontFamily: "Inter_700Bold",
     minWidth: 56,
     textAlign: "right",
+    flexShrink: 0,
   },
   iconBtn: {
-    padding: 4,
+    padding: 6,
   },
 });

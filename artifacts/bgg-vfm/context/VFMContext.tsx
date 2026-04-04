@@ -24,6 +24,7 @@ export interface Game {
   buyerSeller?: string;
   condition?: string;
   notes?: string;
+  bggUrl?: string;
   source: GameSource;
   createdAt: string;
   updatedAt: string;
@@ -228,6 +229,7 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
           buyerSeller: item.buyerSeller,
           condition: item.condition,
           notes: item.notes,
+          bggUrl: `https://boardgamegeek.com/geeklist/${listId}/item/${item.id}`,
           source: "bgg" as const,
         }));
 
