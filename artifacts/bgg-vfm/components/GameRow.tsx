@@ -20,6 +20,19 @@ export function GameRow({ game, onEdit }: GameRowProps) {
   const colors = useColors();
   const { deleteGame } = useVFM();
 
+  const isAuction = game.type === "auction";
+  const isWinning = isAuction && game.auctionStatus === "winning";
+  const isOutbid = isAuction && game.auctionStatus === "outbid";
+
+  const typeColor =
+    isWinning
+      ? colors.success
+      : isOutbid
+      ? colors.destructive
+      : game.type === "purchase"
+      ? colors.warning
+      : colors.primary;
+
   const statusColor =
     game.status === "sold"
       ? colors.success
@@ -27,8 +40,8 @@ export function GameRow({ game, onEdit }: GameRowProps) {
       ? colors.info
       : colors.mutedForeground;
 
-  const typeColor =
-    game.type === "purchase" ? colors.warning : colors.primary;
+  const badgeIcon: React.ComponentProps<typeof Feather>["name"] =
+    isWinning ? "trending-up" : isOutbid ? "trending-down" : game.type === "purchase" ? "shopping-bag" : "tag";
 
   const handleDelete = () => {
     Alert.alert("Delete Entry", `Remove "${game.title}"?`, [
@@ -41,21 +54,23 @@ export function GameRow({ game, onEdit }: GameRowProps) {
     ]);
   };
 
+  const priceLabel = isAuction ? `Bid: $${game.price.toFixed(2)}` : `$${game.price.toFixed(2)}`;
+
   return (
-    <View style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={[styles.row, { backgroundColor: colors.card, borderColor: isOutbid ? colors.destructive + "40" : colors.border }]}>
       <View style={[styles.typeBadge, { backgroundColor: typeColor + "20" }]}>
-        <Feather
-          name={game.type === "purchase" ? "shopping-bag" : "tag"}
-          size={14}
-          color={typeColor}
-        />
+        <Feather name={badgeIcon} size={14} color={typeColor} />
       </View>
       <View style={styles.info}>
         <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
           {game.title}
         </Text>
         <View style={styles.meta}>
-          {game.type === "sale" ? (
+          {isAuction ? (
+            <Text style={[styles.status, { color: typeColor }]}>
+              {isWinning ? "Winning" : "Outbid"}
+            </Text>
+          ) : game.type === "sale" ? (
             <Text style={[styles.status, { color: statusColor }]}>
               {STATUS_LABELS[game.status]}
             </Text>
@@ -69,8 +84,8 @@ export function GameRow({ game, onEdit }: GameRowProps) {
           ) : null}
         </View>
       </View>
-      <Text style={[styles.price, { color: colors.foreground }]}>
-        ${game.price.toFixed(2)}
+      <Text style={[styles.price, { color: isAuction ? typeColor : colors.foreground }]}>
+        {priceLabel}
       </Text>
       <TouchableOpacity style={styles.iconBtn} onPress={() => onEdit(game)} hitSlop={8}>
         <Feather name="edit-2" size={16} color={colors.mutedForeground} />
@@ -121,7 +136,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
   },
   price: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: "Inter_700Bold",
     minWidth: 56,
     textAlign: "right",

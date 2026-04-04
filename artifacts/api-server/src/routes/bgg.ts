@@ -61,6 +61,22 @@ function parsePriceFromComment(text: string): number {
   return m ? parseFloat(m[1]) : 0;
 }
 
+function parseBidAmount(text: string): number {
+  // Match bid-related dollar amounts: "bid $15", "I'll bid $15", "$15", etc.
+  const bidPattern = /bid\s+\$?\s*([\d.]+)/i;
+  const dollarPattern = /\$\s*([\d.]+)/;
+  const m = text.match(bidPattern) ?? text.match(dollarPattern);
+  return m ? parseFloat(m[1]) : 0;
+}
+
+function isAuctionItem(body: string): boolean {
+  return (
+    /\[B\]SB:/i.test(body) ||
+    /\bSB:\s*\$?\$?\d/i.test(body) ||
+    /starting\s+bid/i.test(body)
+  );
+}
+
 function parseCondition(body: string): string | undefined {
   const m =
     body.match(/Condition:\[\/B\]\s*([^\n\[]+)/i) ||
@@ -147,8 +163,10 @@ interface ParsedItem {
   id: string;
   gameTitle: string;
   price: number;
-  type: "sale" | "purchase";
+  type: "sale" | "purchase" | "auction";
   status: "listed" | "sold" | "withdrawn" | "expired";
+  auctionStatus?: "winning" | "outbid";
+  myBid?: number;
   buyerSeller?: string;
   condition?: string;
   notes?: string;
@@ -209,9 +227,43 @@ router.get("/bgg/geeklist", async (req, res) => {
         continue;
       }
 
-      // ── Case 2: Items by others where the user appears as buyer ──────────────
+      // ── Case 2: Auction items — check if user has placed a bid ───────────────
+      if (isAuctionItem(body)) {
+        const userBidComments = comments.filter(
+          (c) => c.username === usernameLower && parseBidAmount(c.text) > 0
+        );
 
-      // 2a: BGG [user=] tag in body
+        if (userBidComments.length > 0) {
+          const myHighestBid = Math.max(...userBidComments.map((c) => parseBidAmount(c.text)));
+          const otherBids = comments
+            .filter((c) => c.username !== usernameLower)
+            .map((c) => parseBidAmount(c.text))
+            .filter((v) => v > 0);
+          const highestOtherBid = otherBids.length > 0 ? Math.max(...otherBids) : 0;
+
+          const auctionStatus: "winning" | "outbid" =
+            myHighestBid >= highestOtherBid ? "winning" : "outbid";
+
+          const isSold = item["@_sold"] === "1" || item["@_sold"] === 1;
+
+          items.push({
+            id: String(item["@_id"] ?? Math.random()),
+            gameTitle: objectname,
+            price: myHighestBid,
+            type: "auction",
+            status: isSold ? "sold" : "listed",
+            auctionStatus,
+            myBid: myHighestBid,
+            buyerSeller: item["@_username"],
+            condition: parseCondition(body),
+          });
+          continue;
+        }
+      }
+
+      // ── Case 3: Items by others where the user appears as buyer ──────────────
+
+      // 3a: BGG [user=] tag in body
       const userTagMatch = body.match(
         /[Ss][Oo][Ll][Dd]\s+to:?\s*.*?\[user=([^\]]+)\]/s
       );
@@ -228,7 +280,7 @@ router.get("/bgg/geeklist", async (req, res) => {
         continue;
       }
 
-      // 2b: Seller typed the real name instead of a BGG tag
+      // 3b: Seller typed the real name instead of a BGG tag
       if (
         realNameLower.length > 0 &&
         body.toLowerCase().includes("sold") &&
@@ -246,7 +298,7 @@ router.get("/bgg/geeklist", async (req, res) => {
         continue;
       }
 
-      // ── Case 3: Comments — user said "I'll take this" and wasn't cancelled ──
+      // ── Case 4: Comments — user said "I'll take this" and wasn't cancelled ──
       const userComments = comments.filter((c) => c.username === usernameLower);
       if (userComments.length === 0) continue;
 

@@ -19,7 +19,7 @@ import { StatCard } from "@/components/StatCard";
 import { Game, useVFM } from "@/context/VFMContext";
 import { useColors } from "@/hooks/useColors";
 
-type FilterType = "all" | "listed" | "sold" | "purchase";
+type FilterType = "all" | "listed" | "sold" | "purchase" | "winning" | "outbid";
 
 export default function HomeScreen() {
   const colors = useColors();
@@ -39,6 +39,8 @@ export default function HomeScreen() {
     if (filter === "listed") matchFilter = g.type === "sale" && g.status === "listed";
     else if (filter === "sold") matchFilter = g.type === "sale" && g.status === "sold";
     else if (filter === "purchase") matchFilter = g.type === "purchase";
+    else if (filter === "winning") matchFilter = g.type === "auction" && g.auctionStatus === "winning";
+    else if (filter === "outbid") matchFilter = g.type === "auction" && g.auctionStatus === "outbid";
     const matchSearch =
       search.length === 0 ||
       g.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -158,6 +160,18 @@ export default function HomeScreen() {
                 accent="warning"
               />
               <StatCard
+                label="Auctions Winning"
+                value={stats.winningCount}
+                sub="currently highest bidder"
+                accent="success"
+              />
+              <StatCard
+                label="Auctions Outbid"
+                value={stats.outbidCount}
+                sub="someone bid higher"
+                accent="destructive"
+              />
+              <StatCard
                 label="Amount Owed"
                 value={`$${stats.amountOwed.toFixed(2)}`}
                 sub="total owed for purchases"
@@ -214,35 +228,43 @@ export default function HomeScreen() {
                 </View>
 
                 <View style={styles.filterRow}>
-                  {(["all", "listed", "sold", "purchase"] as FilterType[]).map((f) => (
-                    <TouchableOpacity
-                      key={f}
-                      style={[
-                        styles.filterChip,
-                        {
-                          backgroundColor:
-                            filter === f ? colors.primary : colors.secondary,
-                          borderColor:
-                            filter === f ? colors.primary : colors.border,
-                        },
-                      ]}
-                      onPress={() => setFilter(f)}
-                    >
-                      <Text
+                  {(["all", "listed", "sold", "purchase", "winning", "outbid"] as FilterType[]).map((f) => {
+                    const label =
+                      f === "all" ? "All" :
+                      f === "listed" ? "Listed" :
+                      f === "sold" ? "Sold" :
+                      f === "purchase" ? "Purchased" :
+                      f === "winning" ? "Winning" : "Outbid";
+                    const isAuctionTab = f === "winning" || f === "outbid";
+                    const activeColor = isAuctionTab
+                      ? (f === "winning" ? colors.success : colors.destructive)
+                      : colors.primary;
+                    const isActive = filter === f;
+                    return (
+                      <TouchableOpacity
+                        key={f}
                         style={[
-                          styles.filterChipText,
+                          styles.filterChip,
                           {
-                            color:
-                              filter === f
-                                ? colors.primaryForeground
-                                : colors.foreground,
+                            backgroundColor: isActive ? activeColor : colors.secondary,
+                            borderColor: isActive ? activeColor : colors.border,
                           },
                         ]}
+                        onPress={() => setFilter(f)}
                       >
-                        {f === "all" ? "All" : f === "listed" ? "Listed" : f === "sold" ? "Sold" : "Purchased"}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text
+                          style={[
+                            styles.filterChipText,
+                            {
+                              color: isActive ? colors.primaryForeground : colors.foreground,
+                            },
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
 
                 {filtered.length === 0 && search.length > 0 && (

@@ -9,7 +9,8 @@ import React, {
 import { getBaseUrl } from "@workspace/api-client-react";
 
 export type ListingStatus = "listed" | "sold" | "expired" | "withdrawn";
-export type TransactionType = "sale" | "purchase";
+export type TransactionType = "sale" | "purchase" | "auction";
+export type AuctionStatus = "winning" | "outbid";
 export type GameSource = "manual" | "bgg";
 
 export interface Game {
@@ -18,6 +19,8 @@ export interface Game {
   price: number;
   status: ListingStatus;
   type: TransactionType;
+  auctionStatus?: AuctionStatus;
+  myBid?: number;
   buyerSeller?: string;
   condition?: string;
   notes?: string;
@@ -36,6 +39,8 @@ export interface BggSettings {
 export interface SyncResult {
   sales: number;
   purchases: number;
+  auctionsWinning: number;
+  auctionsOutbid: number;
   listTitle: string;
 }
 
@@ -218,6 +223,8 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
           price: item.price ?? 0,
           type: item.type,
           status: item.status,
+          auctionStatus: item.auctionStatus,
+          myBid: item.myBid,
           buyerSeller: item.buyerSeller,
           condition: item.condition,
           notes: item.notes,
@@ -232,6 +239,8 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
         return {
           sales: mapped.filter((g: any) => g.type === "sale").length,
           purchases: mapped.filter((g: any) => g.type === "purchase").length,
+          auctionsWinning: mapped.filter((g: any) => g.type === "auction" && g.auctionStatus === "winning").length,
+          auctionsOutbid: mapped.filter((g: any) => g.type === "auction" && g.auctionStatus === "outbid").length,
           listTitle,
         };
       } finally {
@@ -249,6 +258,12 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
       (g) => g.type === "sale" && g.status === "sold"
     ).length,
     purchasedCount: games.filter((g) => g.type === "purchase").length,
+    winningCount: games.filter(
+      (g) => g.type === "auction" && g.auctionStatus === "winning"
+    ).length,
+    outbidCount: games.filter(
+      (g) => g.type === "auction" && g.auctionStatus === "outbid"
+    ).length,
     amountOwed: games
       .filter((g) => g.type === "purchase")
       .reduce((sum, g) => sum + g.price, 0),

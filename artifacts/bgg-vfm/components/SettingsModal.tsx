@@ -62,9 +62,13 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
 
     try {
       const result = await syncFromBgg(settings);
-      setSyncStatus(
-        `Synced: ${result.sales} listing${result.sales !== 1 ? "s" : ""}, ${result.purchases} purchase${result.purchases !== 1 ? "s" : ""}`
-      );
+      const parts = [
+        `${result.sales} listing${result.sales !== 1 ? "s" : ""}`,
+        `${result.purchases} purchase${result.purchases !== 1 ? "s" : ""}`,
+        `${result.auctionsWinning} winning`,
+        `${result.auctionsOutbid} outbid`,
+      ];
+      setSyncStatus(`Synced: ${parts.join(", ")}`);
       onSyncComplete();
     } catch (err: any) {
       setSyncStatus(null);
