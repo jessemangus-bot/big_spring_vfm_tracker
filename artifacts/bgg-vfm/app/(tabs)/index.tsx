@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AddEditModal } from "@/components/AddEditModal";
 import { GameRow } from "@/components/GameRow";
+import { PoweredByBGG } from "@/components/PoweredByBGG";
 import { SettingsModal } from "@/components/SettingsModal";
 import { StatCard } from "@/components/StatCard";
 import { Game, useVFM } from "@/context/VFMContext";
@@ -285,6 +286,11 @@ export default function HomeScreen() {
         renderItem={({ item }) => (
           <GameRow game={item} onEdit={handleEdit} />
         )}
+        ListFooterComponent={
+          <View style={styles.attributionWrap}>
+            <PoweredByBGG />
+          </View>
+        }
       />
 
       <AddEditModal
@@ -422,5 +428,9 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 20,
+  },
+  attributionWrap: {
+    marginTop: 16,
+    marginBottom: 8,
   },
 });

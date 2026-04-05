@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { PoweredByBGG } from "@/components/PoweredByBGG";
 import { useColors } from "@/hooks/useColors";
 import { Game, ListingStatus, TransactionType, useVFM } from "@/context/VFMContext";
 
@@ -204,6 +205,8 @@ export function AddEditModal({ visible, editGame, onClose }: AddEditModalProps) 
             numberOfLines={3}
           />
 
+          <PoweredByBGG style={styles.attribution} />
+
           <View style={{ height: insets.bottom + 32 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -274,6 +277,9 @@ const styles = StyleSheet.create({
   notesInput: {
     minHeight: 80,
     textAlignVertical: "top",
+  },
+  attribution: {
+    marginTop: 24,
   },
   statusRow: {
     flexDirection: "row",

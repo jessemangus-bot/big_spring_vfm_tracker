@@ -1,6 +1,7 @@
 import { Link, Stack } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 
+import { PoweredByBGG } from "@/components/PoweredByBGG";
 import { useColors } from "@/hooks/useColors";
 
 export default function NotFoundScreen() {
@@ -19,6 +20,8 @@ export default function NotFoundScreen() {
             Go to home screen!
           </Text>
         </Link>
+
+        <PoweredByBGG style={styles.attribution} />
       </View>
     </>
   );
@@ -41,5 +44,9 @@ const styles = StyleSheet.create({
   },
   linkText: {
     fontSize: 14,
+  },
+  attribution: {
+    marginTop: 12,
+    maxWidth: 320,
   },
 });

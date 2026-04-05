@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { PoweredByBGG } from "@/components/PoweredByBGG";
 import { useColors } from "@/hooks/useColors";
 import { BggSettings, useVFM } from "@/context/VFMContext";
 
@@ -273,6 +274,8 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
             </TouchableOpacity>
           </View>
 
+          <PoweredByBGG style={styles.attribution} />
+
           <View style={{ height: insets.bottom + 32 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -378,5 +381,8 @@ const styles = StyleSheet.create({
   donationBtnText: {
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
+  },
+  attribution: {
+    marginTop: 24,
   },
 });
