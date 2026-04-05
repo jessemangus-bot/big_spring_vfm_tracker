@@ -48,7 +48,6 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
     geeklistUrl: geeklistUrl.trim(),
     username: username.trim(),
     realName: realName.trim(),
-    apiToken: "",
   });
 
   const handleSave = () => {

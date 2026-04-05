@@ -31,7 +31,7 @@ paths:
       operationId: getBggGeeklist
       tags: [bgg]
       summary: Fetch and parse a BGG geeklist
-      description: Fetches a BGG geeklist via the XML API and returns parsed items filtered by username
+      description: Fetches a BGG geeklist via the XML API and returns parsed items filtered by username. BGG API auth is server-side via environment configuration.
       parameters:
         - name: listId
           in: query
@@ -45,12 +45,12 @@ paths:
           schema:
             type: string
           description: BGG username to filter items by
-        - name: apiToken
+        - name: realName
           in: query
-          required: true
+          required: false
           schema:
             type: string
-          description: BGG API bearer token
+          description: Optional real name fallback used for matching "sold to" mentions
       responses:
         "200":
           description: Parsed geeklist items
@@ -60,6 +60,12 @@ paths:
                 $ref: "#/components/schemas/BggGeelist"
         "400":
           description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server configuration error
           content:
             application/json:
               schema:

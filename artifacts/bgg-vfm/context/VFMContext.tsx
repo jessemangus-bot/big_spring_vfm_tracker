@@ -33,7 +33,6 @@ export interface Game {
 export interface BggSettings {
   geeklistUrl: string;
   username: string;
-  apiToken: string;
   realName: string;
 }
 
@@ -45,7 +44,6 @@ export interface SyncResult {
   listTitle: string;
 }
 
-const EMBEDDED_API_TOKEN = "3cd22331-ee90-4ffe-ad01-72ed27320244";
 const DEFAULT_GEEKLIST_URL =
   "https://boardgamegeek.com/geeklist/375812/bgg-spring-2026-virtual-flea-market-vfm";
 
@@ -84,9 +82,22 @@ const SYNC_KEY = "bgg_vfm_last_synced";
 const DEFAULT_SETTINGS: BggSettings = {
   geeklistUrl: DEFAULT_GEEKLIST_URL,
   username: "",
-  apiToken: "",
   realName: "",
 };
+
+function normalizeBggSettings(raw: unknown): BggSettings {
+  if (!raw || typeof raw !== "object") return DEFAULT_SETTINGS;
+
+  const value = raw as Record<string, unknown>;
+  const geeklistUrl =
+    typeof value.geeklistUrl === "string" && value.geeklistUrl.trim().length > 0
+      ? value.geeklistUrl
+      : DEFAULT_SETTINGS.geeklistUrl;
+  const username = typeof value.username === "string" ? value.username : "";
+  const realName = typeof value.realName === "string" ? value.realName : "";
+
+  return { geeklistUrl, username, realName };
+}
 
 export function VFMProvider({ children }: { children: React.ReactNode }) {
   const [games, setGames] = useState<Game[]>([]);
@@ -104,7 +115,14 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
         try { setGames(JSON.parse(rawGames)); } catch {}
       }
       if (rawSettings) {
-        try { setBggSettings(JSON.parse(rawSettings)); } catch {}
+        try {
+          const normalized = normalizeBggSettings(JSON.parse(rawSettings));
+          setBggSettings(normalized);
+          const serialized = JSON.stringify(normalized);
+          if (serialized !== rawSettings) {
+            AsyncStorage.setItem(SETTINGS_KEY, serialized);
+          }
+        } catch {}
       }
       if (rawSync) {
         setLastSyncedAtState(rawSync);
@@ -203,7 +221,6 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
         const params = new URLSearchParams({
           listId,
           username: settings.username,
-          apiToken: EMBEDDED_API_TOKEN,
         });
         if (settings.realName) params.set("realName", settings.realName);
 

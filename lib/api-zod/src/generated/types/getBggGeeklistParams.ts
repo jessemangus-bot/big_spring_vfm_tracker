@@ -16,7 +16,7 @@ export type GetBggGeeklistParams = {
    */
   username: string;
   /**
-   * BGG API bearer token
+   * Optional real name fallback used for matching "sold to" mentions
    */
-  apiToken: string;
+  realName?: string;
 };

@@ -4,6 +4,7 @@ import { XMLParser } from "fast-xml-parser";
 const router: IRouter = Router();
 
 const BGG_API_BASE = "https://boardgamegeek.com/xmlapi/geeklist";
+const BGG_API_TOKEN_ENV_VAR = "BGG_API_TOKEN";
 const MAX_RETRIES = 5;
 const RETRY_DELAY_MS = 3000;
 
@@ -173,10 +174,22 @@ interface ParsedItem {
 }
 
 router.get("/bgg/geeklist", async (req, res) => {
-  const { listId, username, apiToken, realName } = req.query as Record<string, string>;
+  const { listId, username, realName } = req.query as Record<string, string>;
 
-  if (!listId || !username || !apiToken) {
-    res.status(400).json({ error: "listId, username, and apiToken are required" });
+  if (!listId || !username) {
+    res.status(400).json({ error: "listId and username are required" });
+    return;
+  }
+
+  const apiToken = process.env[BGG_API_TOKEN_ENV_VAR]?.trim();
+  if (!apiToken) {
+    req.log.error(
+      { envVar: BGG_API_TOKEN_ENV_VAR },
+      "Missing required BGG API token configuration",
+    );
+    res.status(500).json({
+      error: `Server is missing ${BGG_API_TOKEN_ENV_VAR} configuration`,
+    });
     return;
   }
 

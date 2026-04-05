@@ -16,7 +16,7 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * Fetches a BGG geeklist via the XML API and returns parsed items filtered by username
+ * Fetches a BGG geeklist via the XML API and returns parsed items filtered by username. BGG API auth is server-side via environment configuration.
  * @summary Fetch and parse a BGG geeklist
  */
 export const GetBggGeeklistQueryParams = zod.object({
@@ -24,7 +24,10 @@ export const GetBggGeeklistQueryParams = zod.object({
     .string()
     .describe("The BGG geeklist ID (extracted from the URL)"),
   username: zod.coerce.string().describe("BGG username to filter items by"),
-  apiToken: zod.coerce.string().describe("BGG API bearer token"),
+  realName: zod.coerce
+    .string()
+    .describe('Optional real name fallback used for matching "sold to" mentions')
+    .optional(),
 });
 
 export const GetBggGeeklistResponse = zod.object({

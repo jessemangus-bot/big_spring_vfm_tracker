@@ -48,15 +48,30 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 - `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
+## GitHub Pages Frontend Deploy
+
+`artifacts/bgg-vfm` includes a GitHub Actions workflow at `.github/workflows/deploy-bgg-vfm-pages.yml` that:
+
+- installs workspace dependencies
+- runs `pnpm --filter @workspace/bgg-vfm run build:web` (`expo export -p web`)
+- uploads `artifacts/bgg-vfm/dist`
+- deploys to GitHub Pages with `actions/deploy-pages`
+
+Required repo settings:
+
+- GitHub repo settings → Pages → Source: `GitHub Actions`
+- Set repo variable or secret `EXPO_PUBLIC_API_BASE_URL` to your deployed backend URL (for example `https://api.example.com`)
+- Optional repo variable `EXPO_PUBLIC_BASE_URL` to override the Pages subpath (default is `/<repo-name>`)
+
 ## Artifacts
 
 ### `artifacts/bgg-vfm` (`@workspace/bgg-vfm`)
 
 Expo mobile app for tracking BGG Spring 2026 VFM marketplace activity. Uses AsyncStorage for local persistence. Can sync directly from a BGG geeklist via the api-server proxy.
 
-- Screens: Dashboard (stats + game list), Settings modal (BGG URL, username, API token), Add/Edit modal
+- Screens: Dashboard (stats + game list), Settings modal (BGG URL, username, optional real name), Add/Edit modal
 - Context: `VFMContext` manages games, stats, and BGG settings
-- BGG sync: Calls `/api/bgg/geeklist` which proxies and parses BGG XML
+- BGG sync: Calls `/api/bgg/geeklist` which proxies and parses BGG XML using server-side `BGG_API_TOKEN`
 - Sources: Games can be "manual" (user-added) or "bgg" (synced from BGG)
 
 ## Packages
