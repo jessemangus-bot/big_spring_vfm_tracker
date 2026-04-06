@@ -12,7 +12,7 @@ import { Stack } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getBaseUrl } from "@workspace/api-client-react";
-import { PoweredByBGG } from "@/components/PoweredByBGG";
+import { AppFooter } from "@/components/AppFooter";
 import { useVFM } from "@/context/VFMContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -203,11 +203,7 @@ export default function WishlistScreen() {
                 </View>
               ) : null
             }
-            ListFooterComponent={
-              <View style={styles.footer}>
-                <PoweredByBGG />
-              </View>
-            }
+            ListFooterComponent={<AppFooter />}
           />
         )}
       </View>
@@ -316,9 +312,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_500Medium",
     lineHeight: 18,
-  },
-  footer: {
-    marginTop: 16,
-    marginBottom: 4,
   },
 });

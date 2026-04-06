@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AddEditModal } from "@/components/AddEditModal";
 import { GameRow } from "@/components/GameRow";
-import { PoweredByBGG } from "@/components/PoweredByBGG";
+import { AppFooter } from "@/components/AppFooter";
 import { SettingsModal } from "@/components/SettingsModal";
 import { StatCard } from "@/components/StatCard";
 import { Game, useVFM } from "@/context/VFMContext";
@@ -289,7 +289,7 @@ export default function HomeScreen() {
           <GameRow game={item} onEdit={handleEdit} />
         )}
         ListFooterComponent={
-          <View style={styles.attributionWrap}>
+          <AppFooter>
             <TouchableOpacity
               style={[styles.wishlistBtn, { backgroundColor: colors.primary }]}
               onPress={() => router.push("/wishlist")}
@@ -300,8 +300,7 @@ export default function HomeScreen() {
                 Wishlist
               </Text>
             </TouchableOpacity>
-            <PoweredByBGG />
-          </View>
+          </AppFooter>
         }
       />
 
@@ -440,10 +439,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 20,
-  },
-  attributionWrap: {
-    marginTop: 16,
-    marginBottom: 8,
   },
   wishlistBtn: {
     borderRadius: 10,
