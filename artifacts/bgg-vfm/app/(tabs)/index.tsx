@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useState } from "react";
+import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +26,7 @@ type FilterType = "all" | "listed" | "sold" | "purchase" | "winning" | "outbid";
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { games, stats, lastSyncedAt, syncFromBgg, isSyncing, bggSettings } = useVFM();
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -288,6 +290,16 @@ export default function HomeScreen() {
         )}
         ListFooterComponent={
           <View style={styles.attributionWrap}>
+            <TouchableOpacity
+              style={[styles.wishlistBtn, { backgroundColor: colors.primary }]}
+              onPress={() => router.push("/wishlist")}
+              activeOpacity={0.8}
+            >
+              <Feather name="heart" size={16} color={colors.primaryForeground} />
+              <Text style={[styles.wishlistBtnText, { color: colors.primaryForeground }]}>
+                Wishlist
+              </Text>
+            </TouchableOpacity>
             <PoweredByBGG />
           </View>
         }
@@ -432,5 +444,19 @@ const styles = StyleSheet.create({
   attributionWrap: {
     marginTop: 16,
     marginBottom: 8,
+  },
+  wishlistBtn: {
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  wishlistBtnText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
   },
 });

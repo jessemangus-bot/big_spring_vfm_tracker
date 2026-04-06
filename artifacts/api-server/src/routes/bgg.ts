@@ -4,6 +4,7 @@ import { XMLParser } from "fast-xml-parser";
 const router: IRouter = Router();
 
 const BGG_API_BASE = "https://boardgamegeek.com/xmlapi/geeklist";
+const BGG_COLLECTION_API_BASE = "https://boardgamegeek.com/xmlapi2/collection";
 const BGG_API_TOKEN_ENV_VAR = "BGG_API_TOKEN";
 const MAX_RETRIES = 5;
 const RETRY_DELAY_MS = 3000;
@@ -32,6 +33,68 @@ async function fetchGeelist(listId: string, apiToken: string): Promise<string> {
     return text;
   }
   throw new Error("BGG API did not respond in time — please try again");
+}
+
+async function fetchCollection(username: string, apiToken: string): Promise<string> {
+  const params = new URLSearchParams({
+    username,
+    stats: "1",
+  });
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const resp = await fetch(`${BGG_COLLECTION_API_BASE}?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${apiToken}` },
+    });
+
+    if (!resp.ok) {
+      throw new Error(`BGG collection API returned ${resp.status}`);
+    }
+
+    const text = await resp.text();
+
+    if (text.includes("accepted and will be processed")) {
+      await sleep(RETRY_DELAY_MS);
+      continue;
+    }
+
+    return text;
+  }
+  throw new Error("BGG collection API did not respond in time — please try again");
+}
+
+function attrIsTrue(value: unknown): boolean {
+  return value === "1" || value === 1 || value === true;
+}
+
+type WishlistMatchType = "wishlist" | "want_in_trade" | "want_to_buy";
+
+function parseCollectionMatchMap(collectionXml: string): Map<string, WishlistMatchType[]> {
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    isArray: (name) => name === "item",
+  });
+  const parsed = parser.parse(collectionXml);
+  const rawItems: any[] = parsed.items?.item ?? [];
+  const matchMap = new Map<string, WishlistMatchType[]>();
+
+  for (const item of rawItems) {
+    const objectId = String(item["@_objectid"] ?? "");
+    if (!objectId) continue;
+
+    const status = item.status ?? {};
+    const matchTypes: WishlistMatchType[] = [];
+
+    if (attrIsTrue(status["@_wishlist"])) matchTypes.push("wishlist");
+    if (attrIsTrue(status["@_want"])) matchTypes.push("want_in_trade");
+    if (attrIsTrue(status["@_wanttobuy"])) matchTypes.push("want_to_buy");
+
+    if (matchTypes.length > 0) {
+      matchMap.set(objectId, matchTypes);
+    }
+  }
+
+  return matchMap;
 }
 
 function stripBBCode(text: string): string {
@@ -135,7 +198,7 @@ const PURCHASE_INTENT_RE = new RegExp(
 
 // Phrases that explicitly cancel / withdraw interest
 const CANCELLED_RE = new RegExp(
-  `\\bi${APO}?(?:ll| will)\\s+pass\\b|\\bno\\s+longer\\s+interested\\b|\\bnevermind\\b|\\bnever\\s+mind\\b|\\bno\\s+thanks\\b|\\bi\\s+will\\s+pass\\b`,
+  `\\bi${APO}?(?:ll|\\s*will|\\s*am\\s+(?:going\\s+to|gonna))\\s+pass\\b|\\bi\\s+have\\s+to\\s+pass\\b|\\bgoing\\s+to\\s+pass\\b|\\bno\\s+longer\\s+interested\\b|\\bnevermind\\b|\\bnever\\s+mind\\b|\\bno\\s+thanks\\b`,
   "i"
 );
 
@@ -158,6 +221,45 @@ function getComments(item: any): ParsedComment[] {
     username: (c["@_username"] ?? "").toLowerCase(),
     text: typeof c === "string" ? c : (c["#text"] ?? c._ ?? String(c)),
   }));
+}
+
+interface PurchaseIntentState {
+  hasActiveIntent: boolean;
+  latestIntentComment?: ParsedComment;
+  hasCancellationSignal: boolean;
+  latestSignal?: "intent" | "cancel";
+}
+
+function getPurchaseIntentState(
+  comments: ParsedComment[],
+  usernameLower: string
+): PurchaseIntentState {
+  let hasActiveIntent = false;
+  let latestIntentComment: ParsedComment | undefined;
+  let hasCancellationSignal = false;
+  let latestSignal: "intent" | "cancel" | undefined;
+
+  for (const comment of comments) {
+    if (comment.username !== usernameLower) continue;
+
+    const hasIntent = PURCHASE_INTENT_RE.test(comment.text);
+    const hasCancelled = CANCELLED_RE.test(comment.text);
+
+    if (hasIntent) {
+      hasActiveIntent = true;
+      latestIntentComment = comment;
+      latestSignal = "intent";
+    }
+
+    // Cancellation in the same or later comment should override intent.
+    if (hasCancelled) {
+      hasActiveIntent = false;
+      hasCancellationSignal = true;
+      latestSignal = "cancel";
+    }
+  }
+
+  return { hasActiveIntent, latestIntentComment, hasCancellationSignal, latestSignal };
 }
 
 interface ParsedItem {
@@ -221,6 +323,7 @@ router.get("/bgg/geeklist", async (req, res) => {
       const body: string = item.body ?? "";
       const objectname: string = item["@_objectname"] ?? "Unknown Game";
       const comments = getComments(item);
+      const purchaseIntentState = getPurchaseIntentState(comments, usernameLower);
 
       // ── Case 1: Items posted BY the user (their own sale listings) ──────────
       if (itemUsername === usernameLower) {
@@ -281,6 +384,7 @@ router.get("/bgg/geeklist", async (req, res) => {
         /[Ss][Oo][Ll][Dd]\s+to:?\s*.*?\[user=([^\]]+)\]/s
       );
       if (userTagMatch && userTagMatch[1].trim().toLowerCase() === usernameLower) {
+        if (purchaseIntentState.latestSignal === "cancel") continue;
         items.push({
           id: String(item["@_id"] ?? Math.random()),
           gameTitle: objectname,
@@ -299,6 +403,7 @@ router.get("/bgg/geeklist", async (req, res) => {
         body.toLowerCase().includes("sold") &&
         body.toLowerCase().includes(realNameLower)
       ) {
+        if (purchaseIntentState.latestSignal === "cancel") continue;
         items.push({
           id: String(item["@_id"] ?? Math.random()),
           gameTitle: objectname,
@@ -312,17 +417,7 @@ router.get("/bgg/geeklist", async (req, res) => {
       }
 
       // ── Case 4: Comments — user said "I'll take this" and wasn't cancelled ──
-      const userComments = comments.filter((c) => c.username === usernameLower);
-      if (userComments.length === 0) continue;
-
-      const hasPurchaseIntent = userComments.some((c) =>
-        PURCHASE_INTENT_RE.test(c.text)
-      );
-      if (!hasPurchaseIntent) continue;
-
-      // Check if user explicitly cancelled after showing intent
-      const lastUserComment = userComments[userComments.length - 1];
-      if (CANCELLED_RE.test(lastUserComment.text)) continue;
+      if (!purchaseIntentState.hasActiveIntent) continue;
 
       // Check for confirmation: sold attribute OR seller said "Sold" / "Sounds good"
       const isSoldByAttr =
@@ -335,7 +430,7 @@ router.get("/bgg/geeklist", async (req, res) => {
       if (!isSoldByAttr && !sellerConfirmed) continue;
 
       // Try to get price from the user's purchase-intent comment first
-      const intentComment = userComments.find((c) => PURCHASE_INTENT_RE.test(c.text));
+      const intentComment = purchaseIntentState.latestIntentComment;
       const commentPrice = intentComment ? parsePriceFromComment(intentComment.text) : 0;
       const finalPrice = commentPrice > 0 ? commentPrice : parsePrice(item, body);
 
@@ -358,6 +453,91 @@ router.get("/bgg/geeklist", async (req, res) => {
   } catch (err: any) {
     req.log.error({ err }, "BGG geeklist fetch failed");
     res.status(502).json({ error: err.message ?? "Failed to fetch geeklist" });
+  }
+});
+
+router.get("/bgg/wishlist", async (req, res) => {
+  const { listId, username } = req.query as Record<string, string>;
+
+  if (!listId || !username) {
+    res.status(400).json({ error: "listId and username are required" });
+    return;
+  }
+
+  const apiToken = process.env[BGG_API_TOKEN_ENV_VAR]?.trim();
+  if (!apiToken) {
+    req.log.error(
+      { envVar: BGG_API_TOKEN_ENV_VAR },
+      "Missing required BGG API token configuration",
+    );
+    res.status(500).json({
+      error: `Server is missing ${BGG_API_TOKEN_ENV_VAR} configuration`,
+    });
+    return;
+  }
+
+  try {
+    const [geeklistXml, collectionXml] = await Promise.all([
+      fetchGeelist(listId, apiToken),
+      fetchCollection(username, apiToken),
+    ]);
+
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: "@_",
+      isArray: (name) => name === "item" || name === "comment",
+    });
+    const parsed = parser.parse(geeklistXml);
+
+    const geeklist = parsed.geeklist;
+    if (!geeklist) {
+      res.status(502).json({ error: "Unexpected BGG API response format" });
+      return;
+    }
+
+    const listTitle: string = geeklist.title ?? "BGG Geeklist";
+    const rawItems: any[] = geeklist.item ?? [];
+    const matchMap = parseCollectionMatchMap(collectionXml);
+
+    const items = rawItems
+      .map((item) => {
+        const body: string = item.body ?? "";
+        const status = parseStatus(item, body);
+        const type = parseType(body);
+        const objectId = String(item["@_objectid"] ?? "");
+        const matchTypes = objectId ? matchMap.get(objectId) : undefined;
+
+        if (!matchTypes || matchTypes.length === 0) return null;
+        if (type !== "sale") return null;
+        if (status !== "listed") return null;
+
+        const itemId = String(item["@_id"] ?? Math.random());
+        const gameTitle: string = item["@_objectname"] ?? "Unknown Game";
+        const seller: string = item["@_username"] ?? "";
+
+        return {
+          id: itemId,
+          objectId,
+          gameTitle,
+          price: parsePrice(item, body),
+          seller,
+          condition: parseCondition(body),
+          matchTypes,
+          bggUrl: `https://boardgamegeek.com/geeklist/${listId}/item/${itemId}`,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => a.gameTitle.localeCompare(b.gameTitle));
+
+    res.json({
+      listTitle,
+      totalItems: rawItems.length,
+      totalMatches: items.length,
+      items,
+    });
+  } catch (err: any) {
+    req.log.error({ err }, "BGG wishlist match fetch failed");
+    res.status(502).json({ error: err.message ?? "Failed to fetch wishlist matches" });
   }
 });
 

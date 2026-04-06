@@ -62,6 +62,8 @@ interface VFMContextValue {
     listedCount: number;
     soldCount: number;
     purchasedCount: number;
+    winningCount: number;
+    outbidCount: number;
     amountOwed: number;
     amountEarned: number;
   };
