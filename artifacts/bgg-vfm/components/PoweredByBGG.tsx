@@ -16,15 +16,17 @@ const POWERED_BY_BGG_LOGO_URL =
 
 interface PoweredByBGGProps {
   style?: StyleProp<ViewStyle>;
+  compact?: boolean;
 }
 
-export function PoweredByBGG({ style }: PoweredByBGGProps) {
+export function PoweredByBGG({ style, compact = false }: PoweredByBGGProps) {
   const colors = useColors();
 
   return (
     <TouchableOpacity
       style={[
         styles.card,
+        compact ? styles.cardCompact : null,
         { backgroundColor: colors.card, borderColor: colors.border },
         style,
       ]}
@@ -35,10 +37,12 @@ export function PoweredByBGG({ style }: PoweredByBGGProps) {
       accessibilityRole="link"
       accessibilityLabel="Powered by BGG. Opens BoardGameGeek"
     >
-      <Text style={[styles.text, { color: colors.mutedForeground }]}>Powered by</Text>
+      <Text style={[styles.text, compact ? styles.textCompact : null, { color: colors.mutedForeground }]}>
+        Powered by
+      </Text>
       <Image
         source={{ uri: POWERED_BY_BGG_LOGO_URL }}
-        style={styles.logo}
+        style={[styles.logo, compact ? styles.logoCompact : null]}
         resizeMode="contain"
       />
     </TouchableOpacity>
@@ -54,13 +58,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: "center",
   },
+  cardCompact: {
+    width: "auto",
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    gap: 6,
+  },
   text: {
     fontSize: 12,
     fontFamily: "Inter_500Medium",
     marginBottom: 6,
   },
+  textCompact: {
+    marginBottom: 0,
+    fontSize: 11,
+  },
   logo: {
     width: 190,
     height: 72,
+  },
+  logoCompact: {
+    width: 66,
+    height: 18,
   },
 });
