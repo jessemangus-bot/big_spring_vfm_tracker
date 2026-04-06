@@ -1,6 +1,5 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useState } from "react";
-import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -15,7 +14,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AddEditModal } from "@/components/AddEditModal";
 import { GameRow } from "@/components/GameRow";
-import { PoweredByBGG } from "@/components/PoweredByBGG";
 import { SettingsModal } from "@/components/SettingsModal";
 import { StatCard } from "@/components/StatCard";
 import { Game, useVFM } from "@/context/VFMContext";
@@ -26,7 +24,6 @@ type FilterType = "all" | "listed" | "sold" | "purchase" | "winning" | "outbid";
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { games, stats, lastSyncedAt, syncFromBgg, isSyncing, bggSettings } = useVFM();
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -143,24 +140,9 @@ export default function HomeScreen() {
         scrollEnabled={true}
         ListHeaderComponent={
           <>
-            <View style={styles.dashboardRow}>
-              <Text style={[styles.dashboardTitle, { color: colors.foreground }]}>
-                Dashboard
-              </Text>
-              <View style={styles.dashboardActions}>
-                <TouchableOpacity
-                  style={[styles.wishlistBtn, { backgroundColor: colors.primary }]}
-                  onPress={() => router.push("/wishlist")}
-                  activeOpacity={0.8}
-                >
-                  <Feather name="heart" size={16} color={colors.primaryForeground} />
-                  <Text style={[styles.wishlistBtnText, { color: colors.primaryForeground }]}>
-                    Wishlist
-                  </Text>
-                </TouchableOpacity>
-                <PoweredByBGG compact />
-              </View>
-            </View>
+            <Text style={[styles.dashboardTitle, { color: colors.foreground }]}>
+              Dashboard
+            </Text>
 
             <View style={styles.statsGrid}>
               <StatCard
@@ -368,21 +350,10 @@ const styles = StyleSheet.create({
   },
   list: { padding: 16 },
   statsGrid: { marginBottom: 20 },
-  dashboardRow: {
-    marginBottom: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
   dashboardTitle: {
     fontSize: 20,
     fontFamily: "Inter_700Bold",
-  },
-  dashboardActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    marginBottom: 14,
   },
   emptySync: {
     borderWidth: 1,
@@ -460,18 +431,5 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 20,
-  },
-  wishlistBtn: {
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-  },
-  wishlistBtnText: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
   },
 });
