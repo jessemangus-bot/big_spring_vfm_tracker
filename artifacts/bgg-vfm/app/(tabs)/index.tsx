@@ -1,6 +1,5 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useState } from "react";
-import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -15,7 +14,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AddEditModal } from "@/components/AddEditModal";
 import { GameRow } from "@/components/GameRow";
-import { PoweredByBGG } from "@/components/PoweredByBGG";
 import { SettingsModal } from "@/components/SettingsModal";
 import { StatCard } from "@/components/StatCard";
 import { Game, useVFM } from "@/context/VFMContext";
@@ -26,7 +24,6 @@ type FilterType = "all" | "listed" | "sold" | "purchase" | "winning" | "outbid";
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { games, stats, lastSyncedAt, syncFromBgg, isSyncing, bggSettings } = useVFM();
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -294,27 +291,6 @@ export default function HomeScreen() {
         )}
       />
 
-      <View
-        pointerEvents="box-none"
-        style={[
-          styles.bottomActionsDock,
-          { bottom: Platform.OS === "web" ? 10 : insets.bottom + 8 },
-        ]}
-      >
-        <TouchableOpacity
-          style={[styles.wishlistDockBtn, { backgroundColor: colors.primary }]}
-          onPress={() => router.push("/wishlist")}
-          activeOpacity={0.8}
-        >
-          <Feather name="heart" size={16} color={colors.primaryForeground} />
-          <Text style={[styles.wishlistDockBtnText, { color: colors.primaryForeground }]}>
-            Wishlist
-          </Text>
-        </TouchableOpacity>
-
-        <PoweredByBGG compact />
-      </View>
-
       <AddEditModal
         visible={addModalVisible}
         editGame={editGame}
@@ -455,26 +431,5 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 20,
-  },
-  bottomActionsDock: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  wishlistDockBtn: {
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-  },
-  wishlistDockBtnText: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
   },
 });

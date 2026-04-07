@@ -1,12 +1,20 @@
 import { BlurView } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useColorScheme,
+} from "react-native";
 
+import { PoweredByBGG } from "@/components/PoweredByBGG";
 import { useColors } from "@/hooks/useColors";
 
 function NativeTabLayout() {
@@ -22,6 +30,7 @@ function NativeTabLayout() {
 
 function ClassicTabLayout() {
   const colors = useColors();
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
@@ -42,19 +51,36 @@ function ClassicTabLayout() {
           ...(isWeb ? { height: 84 } : {}),
         },
         tabBarBackground: () =>
-          isIOS ? (
-            <BlurView
-              intensity={100}
-              tint={isDark ? "dark" : "light"}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : isWeb ? (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: colors.background },
-              ]}
-            />
+          isIOS || isWeb ? (
+            <View style={StyleSheet.absoluteFill}>
+              {isIOS ? (
+                <BlurView
+                  intensity={100}
+                  tint={isDark ? "dark" : "light"}
+                  style={StyleSheet.absoluteFill}
+                />
+              ) : (
+                <View
+                  style={[
+                    StyleSheet.absoluteFill,
+                    { backgroundColor: colors.background },
+                  ]}
+                />
+              )}
+              <View pointerEvents="box-none" style={styles.bottomActionsRow}>
+                <TouchableOpacity
+                  style={[styles.wishlistBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => router.push("/wishlist")}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="heart" size={16} color={colors.primaryForeground} />
+                  <Text style={[styles.wishlistBtnText, { color: colors.primaryForeground }]}>
+                    Wishlist
+                  </Text>
+                </TouchableOpacity>
+                <PoweredByBGG compact />
+              </View>
+            </View>
           ) : null,
       }}
     >
@@ -80,3 +106,28 @@ export default function TabLayout() {
   }
   return <ClassicTabLayout />;
 }
+
+const styles = StyleSheet.create({
+  bottomActionsRow: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: Platform.OS === "web" ? 8 : 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  wishlistBtn: {
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  wishlistBtnText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
+});
