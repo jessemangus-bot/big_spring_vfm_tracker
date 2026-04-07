@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useState } from "react";
+import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +25,7 @@ type FilterType = "all" | "listed" | "sold" | "purchase" | "winning" | "outbid";
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { games, stats, lastSyncedAt, syncFromBgg, isSyncing, bggSettings } = useVFM();
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -106,6 +108,13 @@ export default function HomeScreen() {
             activeOpacity={0.8}
           >
             <Feather name="settings" size={18} color={colors.foreground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
+            onPress={() => router.push("/wishlist")}
+            activeOpacity={0.8}
+          >
+            <Feather name="heart" size={18} color={colors.foreground} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.iconBtn, { backgroundColor: colors.secondary, opacity: isSyncing ? 0.5 : 1 }]}
