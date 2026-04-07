@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
@@ -21,6 +21,17 @@ import { Game, useVFM } from "@/context/VFMContext";
 import { useColors } from "@/hooks/useColors";
 
 type FilterType = "all" | "listed" | "sold" | "purchase" | "winning" | "outbid";
+type SortType = "listing" | "title";
+
+function extractListingNumber(game: Game): number | null {
+  const urlMatch = game.bggUrl?.match(/\/item\/(\d+)/i);
+  if (urlMatch?.[1]) return Number(urlMatch[1]);
+
+  const idMatch = game.id.match(/^bgg_(\d+)$/);
+  if (idMatch?.[1]) return Number(idMatch[1]);
+
+  return null;
+}
 
 export default function HomeScreen() {
   const colors = useColors();
@@ -31,6 +42,7 @@ export default function HomeScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [editGame, setEditGame] = useState<Game | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
+  const [sortBy, setSortBy] = useState<SortType>("listing");
   const [search, setSearch] = useState("");
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -49,6 +61,37 @@ export default function HomeScreen() {
       (g.buyerSeller ?? "").toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
+
+  const sortedFiltered = useMemo(() => {
+    const rows = [...filtered];
+    rows.sort((a, b) => {
+      if (sortBy === "title") {
+        return a.title.localeCompare(b.title, undefined, {
+          sensitivity: "base",
+          numeric: true,
+        });
+      }
+
+      const aNumber = extractListingNumber(a);
+      const bNumber = extractListingNumber(b);
+
+      if (aNumber === null && bNumber === null) {
+        return a.title.localeCompare(b.title, undefined, {
+          sensitivity: "base",
+          numeric: true,
+        });
+      }
+      if (aNumber === null) return 1;
+      if (bNumber === null) return -1;
+      if (aNumber !== bNumber) return aNumber - bNumber;
+
+      return a.title.localeCompare(b.title, undefined, {
+        sensitivity: "base",
+        numeric: true,
+      });
+    });
+    return rows;
+  }, [filtered, sortBy]);
 
   const handleEdit = (game: Game) => {
     setEditGame(game);
@@ -139,7 +182,7 @@ export default function HomeScreen() {
       </View>
 
       <FlatList
-        data={filtered}
+        data={sortedFiltered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           styles.list,
@@ -280,7 +323,60 @@ export default function HomeScreen() {
                   })}
                 </View>
 
-                {filtered.length === 0 && search.length > 0 && (
+                <View style={styles.sortSection}>
+                  <Text style={[styles.sortLabel, { color: colors.mutedForeground }]}>
+                    Sort by
+                  </Text>
+                  <View style={styles.sortRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.sortChip,
+                        {
+                          backgroundColor: sortBy === "listing" ? colors.primary : colors.secondary,
+                          borderColor: sortBy === "listing" ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => setSortBy("listing")}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.sortChipText,
+                          {
+                            color:
+                              sortBy === "listing" ? colors.primaryForeground : colors.foreground,
+                          },
+                        ]}
+                      >
+                        Listing #
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.sortChip,
+                        {
+                          backgroundColor: sortBy === "title" ? colors.primary : colors.secondary,
+                          borderColor: sortBy === "title" ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => setSortBy("title")}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.sortChipText,
+                          {
+                            color: sortBy === "title" ? colors.primaryForeground : colors.foreground,
+                          },
+                        ]}
+                      >
+                        Title
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {sortedFiltered.length === 0 && search.length > 0 && (
                   <View style={styles.empty}>
                     <Feather name="search" size={36} color={colors.mutedForeground} />
                     <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
@@ -412,7 +508,31 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+    marginBottom: 12,
+  },
+  sortSection: {
     marginBottom: 16,
+    gap: 8,
+  },
+  sortLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  sortRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  sortChip: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  sortChipText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
   },
   filterChip: {
     borderWidth: 1,
