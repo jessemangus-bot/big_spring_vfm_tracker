@@ -21,7 +21,7 @@ import { Game, useVFM } from "@/context/VFMContext";
 import { useColors } from "@/hooks/useColors";
 
 type FilterType = "all" | "listed" | "sold" | "purchase" | "winning" | "outbid";
-type SortType = "listing" | "title";
+type SortType = "listing" | "title" | "username";
 
 function extractListingNumber(game: Game): number | null {
   const urlMatch = game.bggUrl?.match(/\/item\/(\d+)/i);
@@ -65,6 +65,31 @@ export default function HomeScreen() {
   const sortedFiltered = useMemo(() => {
     const rows = [...filtered];
     rows.sort((a, b) => {
+      if (sortBy === "username") {
+        const aUser = (a.buyerSeller ?? "").trim();
+        const bUser = (b.buyerSeller ?? "").trim();
+
+        if (!aUser && !bUser) {
+          return a.title.localeCompare(b.title, undefined, {
+            sensitivity: "base",
+            numeric: true,
+          });
+        }
+        if (!aUser) return 1;
+        if (!bUser) return -1;
+
+        const userCmp = aUser.localeCompare(bUser, undefined, {
+          sensitivity: "base",
+          numeric: true,
+        });
+        if (userCmp !== 0) return userCmp;
+
+        return a.title.localeCompare(b.title, undefined, {
+          sensitivity: "base",
+          numeric: true,
+        });
+      }
+
       if (sortBy === "title") {
         return a.title.localeCompare(b.title, undefined, {
           sensitivity: "base",
@@ -371,6 +396,29 @@ export default function HomeScreen() {
                         ]}
                       >
                         Title
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.sortChip,
+                        {
+                          backgroundColor: sortBy === "username" ? colors.primary : colors.secondary,
+                          borderColor: sortBy === "username" ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => setSortBy("username")}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.sortChipText,
+                          {
+                            color:
+                              sortBy === "username" ? colors.primaryForeground : colors.foreground,
+                          },
+                        ]}
+                      >
+                        BGG User
                       </Text>
                     </TouchableOpacity>
                   </View>
