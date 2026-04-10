@@ -120,6 +120,13 @@ function parsePrice(item: any, body: string): number {
   return 0;
 }
 
+function parseBinPrice(body: string): number {
+  const m =
+    body.match(/BIN:\[\/B\]\s*\$?\s*([\d.]+)/i) ??
+    body.match(/\bBIN:\s*\$?\s*([\d.]+)/i);
+  return m ? parseFloat(m[1]) : 0;
+}
+
 function parsePriceFromComment(text: string): number {
   const m = text.match(/\$\s*([\d.]+)/);
   return m ? parseFloat(m[1]) : 0;
@@ -351,6 +358,7 @@ router.get("/bgg/geeklist", async (req, res) => {
 
         if (userBidComments.length > 0) {
           const myHighestBid = Math.max(...userBidComments.map((c) => parseBidAmount(c.text)));
+          const binPrice = parseBinPrice(body);
           const otherBids = comments
             .filter((c) => c.username !== usernameLower)
             .map((c) => parseBidAmount(c.text))
@@ -361,6 +369,22 @@ router.get("/bgg/geeklist", async (req, res) => {
             myHighestBid >= highestOtherBid ? "winning" : "outbid";
 
           const isSold = item["@_sold"] === "1" || item["@_sold"] === 1;
+          const hasReachedBin = binPrice > 0 && myHighestBid >= binPrice;
+          const shouldConvertToPurchase =
+            hasReachedBin && auctionStatus === "winning";
+
+          if (shouldConvertToPurchase) {
+            items.push({
+              id: String(item["@_id"] ?? Math.random()),
+              gameTitle: objectname,
+              price: binPrice,
+              type: "purchase",
+              status: "sold",
+              buyerSeller: item["@_username"],
+              condition: parseCondition(body),
+            });
+            continue;
+          }
 
           items.push({
             id: String(item["@_id"] ?? Math.random()),
