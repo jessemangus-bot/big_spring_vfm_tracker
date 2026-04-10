@@ -379,11 +379,11 @@ router.get("/bgg/geeklist", async (req, res) => {
 
       // ── Case 3: Items by others where the user appears as buyer ──────────────
 
-      // 3a: BGG [user=] tag in body
-      const userTagMatch = body.match(
-        /[Ss][Oo][Ll][Dd]\s+to:?\s*.*?\[user=([^\]]+)\]/s
-      );
-      if (userTagMatch && userTagMatch[1].trim().toLowerCase() === usernameLower) {
+      // 3a: BGG [user=] tag in body must match username exactly.
+      // If a sold-to username exists and is not this user, skip this item.
+      const soldToUsername = parseBuyer(body)?.toLowerCase();
+      if (soldToUsername) {
+        if (soldToUsername !== usernameLower) continue;
         if (purchaseIntentState.latestSignal === "cancel") continue;
         items.push({
           id: String(item["@_id"] ?? Math.random()),
@@ -398,6 +398,7 @@ router.get("/bgg/geeklist", async (req, res) => {
       }
 
       // 3b: Seller typed the real name instead of a BGG tag
+      // (only evaluated when no explicit sold-to username is present).
       if (
         realNameLower.length > 0 &&
         body.toLowerCase().includes("sold") &&
