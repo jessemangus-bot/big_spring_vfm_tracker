@@ -104,6 +104,12 @@ function stripBBCode(text: string): string {
     .trim();
 }
 
+function asText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value == null) return "";
+  return String(value);
+}
+
 function parsePrice(item: any, body: string): number {
   const attrPrice = parseFloat(item["@_price"]);
   if (!isNaN(attrPrice) && attrPrice > 0) return attrPrice;
@@ -127,16 +133,17 @@ function parseBinPrice(body: string): number {
   return m ? parseFloat(m[1]) : 0;
 }
 
-function parsePriceFromComment(text: string): number {
-  const m = text.match(/\$\s*([\d.]+)/);
+function parsePriceFromComment(text: unknown): number {
+  const m = asText(text).match(/\$\s*([\d.]+)/);
   return m ? parseFloat(m[1]) : 0;
 }
 
-function parseBidAmount(text: string): number {
+function parseBidAmount(text: unknown): number {
   // Match bid-related dollar amounts: "bid $15", "I'll bid $15", "$15", etc.
   const bidPattern = /bid\s+\$?\s*([\d.]+)/i;
   const dollarPattern = /\$\s*([\d.]+)/;
-  const m = text.match(bidPattern) ?? text.match(dollarPattern);
+  const normalized = asText(text);
+  const m = normalized.match(bidPattern) ?? normalized.match(dollarPattern);
   return m ? parseFloat(m[1]) : 0;
 }
 
@@ -226,7 +233,7 @@ function getComments(item: any): ParsedComment[] {
   const arr = Array.isArray(raw) ? raw : [raw];
   return arr.map((c: any) => ({
     username: (c["@_username"] ?? "").toLowerCase(),
-    text: typeof c === "string" ? c : (c["#text"] ?? c._ ?? String(c)),
+    text: asText(typeof c === "string" ? c : (c["#text"] ?? c._ ?? c)),
   }));
 }
 
@@ -327,8 +334,8 @@ router.get("/bgg/geeklist", async (req, res) => {
 
     for (const item of rawItems) {
       const itemUsername: string = (item["@_username"] ?? "").toLowerCase();
-      const body: string = item.body ?? "";
-      const objectname: string = item["@_objectname"] ?? "Unknown Game";
+      const body: string = asText(item.body);
+      const objectname: string = asText(item["@_objectname"] ?? "Unknown Game");
       const comments = getComments(item);
       const purchaseIntentState = getPurchaseIntentState(comments, usernameLower);
 
@@ -526,7 +533,7 @@ router.get("/bgg/wishlist", async (req, res) => {
 
     const items = rawItems
       .map((item) => {
-        const body: string = item.body ?? "";
+        const body: string = asText(item.body);
         const status = parseStatus(item, body);
         const type = parseType(body);
         const objectId = String(item["@_objectid"] ?? "");
