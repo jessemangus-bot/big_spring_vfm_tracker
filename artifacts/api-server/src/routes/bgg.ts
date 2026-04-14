@@ -110,26 +110,34 @@ function asText(value: unknown): string {
   return String(value);
 }
 
+function stripStruckThroughText(text: string): string {
+  return text
+    .replace(/\[(?:s|strike|del)\b[^\]]*][\s\S]*?\[\/(?:s|strike|del)\]/gi, " ")
+    .replace(/<(?:s|strike|del)\b[^>]*>[\s\S]*?<\/(?:s|strike|del)>/gi, " ");
+}
+
 function parsePrice(item: any, body: string): number {
   const attrPrice = parseFloat(item["@_price"]);
   if (!isNaN(attrPrice) && attrPrice > 0) return attrPrice;
 
+  const searchableBody = stripStruckThroughText(body);
   const patterns = [
     /(?:BIN|FP):\[\/B\]\s*\$?([\d.]+)/i,
     /(?:BIN|FP):\s*\$?([\d.]+)/i,
     /\$\s*([\d.]+)/,
   ];
   for (const pat of patterns) {
-    const m = body.match(pat);
+    const m = searchableBody.match(pat);
     if (m) return parseFloat(m[1]);
   }
   return 0;
 }
 
 function parseBinPrice(body: string): number {
+  const searchableBody = stripStruckThroughText(body);
   const m =
-    body.match(/BIN:\[\/B\]\s*\$?\s*([\d.]+)/i) ??
-    body.match(/\bBIN:\s*\$?\s*([\d.]+)/i);
+    searchableBody.match(/BIN:\[\/B\]\s*\$?\s*([\d.]+)/i) ??
+    searchableBody.match(/\bBIN:\s*\$?\s*([\d.]+)/i);
   return m ? parseFloat(m[1]) : 0;
 }
 
