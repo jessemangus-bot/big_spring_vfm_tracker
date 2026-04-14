@@ -4,8 +4,10 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
+import { AppState } from "react-native";
 import { getBaseUrl } from "@workspace/api-client-react";
 
 export type ListingStatus = "listed" | "sold" | "expired" | "withdrawn";
@@ -80,6 +82,8 @@ const VFMContext = createContext<VFMContextValue | null>(null);
 const STORAGE_KEY = "bgg_vfm_games_v2";
 const SETTINGS_KEY = "bgg_vfm_settings_v1";
 const SYNC_KEY = "bgg_vfm_last_synced";
+const AUTO_SYNC_INTERVAL_MS = 60 * 60 * 1000;
+const AUTO_SYNC_POLL_MS = 60 * 1000;
 
 const DEFAULT_SETTINGS: BggSettings = {
   geeklistUrl: DEFAULT_GEEKLIST_URL,
@@ -106,6 +110,7 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
   const [bggSettings, setBggSettings] = useState<BggSettings>(DEFAULT_SETTINGS);
   const [lastSyncedAt, setLastSyncedAtState] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const lastAutoSyncAttemptAtRef = useRef<number>(0);
 
   useEffect(() => {
     Promise.all([
@@ -270,6 +275,81 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
     },
     [bggSettings, replaceBggGames]
   );
+
+  const shouldAutoSyncNow = useCallback((): boolean => {
+    if (isSyncing) return false;
+    if (!bggSettings.username) return false;
+    if (!extractListId(bggSettings.geeklistUrl)) return false;
+    const now = Date.now();
+    const lastSuccessfulSyncAt = lastSyncedAt ? Date.parse(lastSyncedAt) : NaN;
+    const baseline = Math.max(
+      Number.isNaN(lastSuccessfulSyncAt) ? 0 : lastSuccessfulSyncAt,
+      lastAutoSyncAttemptAtRef.current,
+    );
+    return now - baseline >= AUTO_SYNC_INTERVAL_MS;
+  }, [bggSettings.geeklistUrl, bggSettings.username, isSyncing, lastSyncedAt]);
+
+  const runAutoSyncIfDue = useCallback(async () => {
+    if (!shouldAutoSyncNow()) return;
+    lastAutoSyncAttemptAtRef.current = Date.now();
+    try {
+      await syncFromBgg();
+    } catch {
+      // Keep auto-sync non-blocking. Manual refresh still surfaces errors.
+    }
+  }, [shouldAutoSyncNow, syncFromBgg]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void runAutoSyncIfDue();
+    }, AUTO_SYNC_POLL_MS);
+
+    // Catch up immediately when the app opens if the last sync is stale.
+    void runAutoSyncIfDue();
+
+    return () => clearInterval(interval);
+  }, [runAutoSyncIfDue]);
+
+  useEffect(() => {
+    const appStateSub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void runAutoSyncIfDue();
+      }
+    });
+
+    const webWindow =
+      typeof globalThis !== "undefined"
+        ? (globalThis as { window?: { addEventListener: (...args: any[]) => void; removeEventListener: (...args: any[]) => void } }).window
+        : undefined;
+    const webDocument =
+      typeof globalThis !== "undefined"
+        ? (globalThis as { document?: { visibilityState?: string; addEventListener: (...args: any[]) => void; removeEventListener: (...args: any[]) => void } }).document
+        : undefined;
+
+    if (webWindow && webDocument) {
+      const onWindowFocus = () => {
+        void runAutoSyncIfDue();
+      };
+      const onVisibilityChange = () => {
+        if (webDocument.visibilityState === "visible") {
+          void runAutoSyncIfDue();
+        }
+      };
+
+      webWindow.addEventListener("focus", onWindowFocus);
+      webDocument.addEventListener("visibilitychange", onVisibilityChange);
+
+      return () => {
+        appStateSub.remove();
+        webWindow.removeEventListener("focus", onWindowFocus);
+        webDocument.removeEventListener("visibilitychange", onVisibilityChange);
+      };
+    }
+
+    return () => {
+      appStateSub.remove();
+    };
+  }, [runAutoSyncIfDue]);
 
   const stats = {
     listedCount: games.filter(
