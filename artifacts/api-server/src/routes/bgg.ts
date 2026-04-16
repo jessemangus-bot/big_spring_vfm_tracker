@@ -113,14 +113,17 @@ function asText(value: unknown): string {
 function stripStruckThroughText(text: string): string {
   return text
     .replace(/\[(?:s|strike|del)\b[^\]]*][\s\S]*?\[\/(?:s|strike|del)\]/gi, " ")
-    .replace(/<(?:s|strike|del)\b[^>]*>[\s\S]*?<\/(?:s|strike|del)>/gi, " ");
+    .replace(/<(?:s|strike|del)\b[^>]*>[\s\S]*?<\/(?:s|strike|del)>/gi, " ")
+    .replace(
+      /<span\b[^>]*text-decoration\s*:\s*line-through[^>]*>[\s\S]*?<\/span>/gi,
+      " ",
+    )
+    .replace(/~~[^~]+~~/g, " ");
 }
 
 function parsePrice(item: any, body: string): number {
-  const attrPrice = parseFloat(item["@_price"]);
-  if (!isNaN(attrPrice) && attrPrice > 0) return attrPrice;
-
   const searchableBody = stripStruckThroughText(body);
+  const hadStruckText = searchableBody !== body;
   const patterns = [
     /(?:BIN|FP):\[\/B\]\s*\$?([\d.]+)/i,
     /(?:BIN|FP):\s*\$?([\d.]+)/i,
@@ -130,6 +133,13 @@ function parsePrice(item: any, body: string): number {
     const m = searchableBody.match(pat);
     if (m) return parseFloat(m[1]);
   }
+
+  // If the listing contains struck-through text, avoid stale @_price fallback.
+  if (hadStruckText) return 0;
+
+  const attrPrice = parseFloat(item["@_price"]);
+  if (!isNaN(attrPrice) && attrPrice > 0) return attrPrice;
+
   return 0;
 }
 
