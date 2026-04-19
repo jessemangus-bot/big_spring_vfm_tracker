@@ -224,7 +224,7 @@ const APO = "['\u2018\u2019]";
 
 // Phrases in a comment that signal purchase intent
 const PURCHASE_INTENT_RE = new RegExp(
-  `\\bi${APO}?ll\\s+take\\s+(this|it|them|all|the\\s+lot)\\b|\\bmine\\b|\\bdibs\\b|\\bi\\s+will\\s+take\\s+(this|it|them)\\b`,
+  `\\bi${APO}?ll\\s+take\\s+(this|it|them|all|the\\s+lot)\\b|\\bmine\\b|\\bdibs\\b|\\bi\\s+will\\s+take\\s+(this|it|them)\\b|\\bi\\s+offer\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bmy\\s+offer\\s+is\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bwould\\s+you\\s+take\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bcan\\s+you\\s+do\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bhow\\s+about\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b`,
   "i"
 );
 
@@ -236,7 +236,7 @@ const CANCELLED_RE = new RegExp(
 
 // Seller confirmation phrases in comments
 const SELLER_CONFIRMED_RE = new RegExp(
-  `\\bsold\\b|\\bsounds\\s+good\\b|\\bit${APO}?s?\\s+yours\\b|\\byou${APO}?re\\s+next\\b|\\byou\\s+got\\s+it\\b`,
+  `\\bsold\\b|\\bsounds\\s+good\\b|\\bit${APO}?s?\\s+yours\\b|\\byou${APO}?re\\s+next\\b|\\byou\\s+got\\s+it\\b|\\boffer\\s+accepted\\b|\\baccepted\\b|\\bi\\s+accept\\b|\\bdeal\\b|\\bworks\\s+for\\s+me\\b`,
   "i"
 );
 
@@ -472,8 +472,8 @@ router.get("/bgg/geeklist", async (req, res) => {
       // Check for confirmation: sold attribute OR seller said "Sold" / "Sounds good"
       const isSoldByAttr =
         item["@_sold"] === "1" || item["@_sold"] === 1;
-      const otherComments = comments.filter((c) => c.username !== usernameLower);
-      const sellerConfirmed = otherComments.some((c) =>
+      const sellerComments = comments.filter((c) => c.username === itemUsername);
+      const sellerConfirmed = sellerComments.some((c) =>
         SELLER_CONFIRMED_RE.test(c.text)
       );
 
