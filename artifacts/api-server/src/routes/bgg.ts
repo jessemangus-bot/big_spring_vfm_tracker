@@ -152,7 +152,8 @@ function parseBinPrice(body: string): number {
 }
 
 function parsePriceFromComment(text: unknown): number {
-  const m = asText(text).match(/\$\s*([\d.]+)/);
+  const searchableText = stripStruckThroughText(asText(text));
+  const m = searchableText.match(/\$\s*([\d.]+)/);
   return m ? parseFloat(m[1]) : 0;
 }
 
@@ -160,7 +161,7 @@ function parseBidAmount(text: unknown): number {
   // Match bid-related dollar amounts: "bid $15", "I'll bid $15", "$15", etc.
   const bidPattern = /bid\s+\$?\s*([\d.]+)/i;
   const dollarPattern = /\$\s*([\d.]+)/;
-  const normalized = asText(text);
+  const normalized = stripStruckThroughText(asText(text));
   const m = normalized.match(bidPattern) ?? normalized.match(dollarPattern);
   return m ? parseFloat(m[1]) : 0;
 }
