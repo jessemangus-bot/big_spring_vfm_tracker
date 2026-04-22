@@ -201,8 +201,17 @@ function parseStatus(item: any, body: string): "listed" | "sold" | "withdrawn" {
 }
 
 function parseBuyer(body: string): string | undefined {
-  const m = body.match(/[Ss][Oo][Ll][Dd]\s+to:?\s*.*?\[user=([^\]]+)\]/s);
-  if (m) return m[1].trim();
+  // Look near "sold"/"sold to" and support both BGG user tags and @handles.
+  const soldContextMatch = body.match(/\bsold(?:\s+to)?\b[\s:]*([\s\S]{0,240})/i);
+  if (!soldContextMatch) return undefined;
+  const soldContext = soldContextMatch[1];
+
+  const userTagMatch = soldContext.match(/\[user=([^\]]+)\]/i);
+  if (userTagMatch) return userTagMatch[1].trim();
+
+  const atHandleMatch = soldContext.match(/@([a-z0-9][a-z0-9_-]{1,31})\b/i);
+  if (atHandleMatch) return atHandleMatch[1].trim();
+
   return undefined;
 }
 
