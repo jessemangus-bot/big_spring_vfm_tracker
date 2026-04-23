@@ -189,6 +189,7 @@ function parseStatus(item: any, body: string): "listed" | "sold" | "withdrawn" {
   if (
     lower.includes("sold to") ||
     lower.includes("[sold]") ||
+    lower.includes("+sold+") ||
     lower.includes("sale complete") ||
     lower.includes("this item has been sold")
   ) {
@@ -200,11 +201,20 @@ function parseStatus(item: any, body: string): "listed" | "sold" | "withdrawn" {
   return "listed";
 }
 
+function extractSoldContext(body: string): string | undefined {
+  const soldToMatch = body.match(/\bsold\s+to\b[\s:]*([\s\S]{0,360})/i);
+  if (soldToMatch) return soldToMatch[1];
+
+  const soldMatch = body.match(/\bsold\b[\s:]*([\s\S]{0,360})/i);
+  if (soldMatch) return soldMatch[1];
+
+  return undefined;
+}
+
 function parseBuyer(body: string): string | undefined {
-  // Look near "sold"/"sold to" and support both BGG user tags and @handles.
-  const soldContextMatch = body.match(/\bsold(?:\s+to)?\b[\s:]*([\s\S]{0,240})/i);
-  if (!soldContextMatch) return undefined;
-  const soldContext = soldContextMatch[1];
+  // Look near "sold"/"sold to" and support common BGG identity formats.
+  const soldContext = extractSoldContext(body);
+  if (!soldContext) return undefined;
 
   const userTagMatch = soldContext.match(/\[user=([^\]]+)\]/i);
   if (userTagMatch) return userTagMatch[1].trim();
@@ -212,7 +222,30 @@ function parseBuyer(body: string): string | undefined {
   const atHandleMatch = soldContext.match(/@([a-z0-9][a-z0-9_-]{1,31})\b/i);
   if (atHandleMatch) return atHandleMatch[1].trim();
 
+  const profileUrlMatch = soldContext.match(
+    /boardgamegeek\.com\/(?:profile|user)\/([a-z0-9][a-z0-9_-]{1,31})\b/i,
+  );
+  if (profileUrlMatch) return profileUrlMatch[1].trim();
+
   return undefined;
+}
+
+function soldContextMentionsUsername(body: string, usernameLower: string): boolean {
+  const soldContext = extractSoldContext(body);
+  if (!soldContext) return false;
+
+  const lowered = soldContext.toLowerCase();
+  const escaped = usernameLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  return (
+    new RegExp(`\\[user=${escaped}\\]`, "i").test(soldContext) ||
+    new RegExp(`@${escaped}\\b`, "i").test(soldContext) ||
+    new RegExp(`\\b${escaped}\\b`, "i").test(lowered) ||
+    new RegExp(
+      `boardgamegeek\\.com\\/(?:profile|user)\\/${escaped}\\b`,
+      "i",
+    ).test(soldContext)
+  );
 }
 
 function parseType(body: string): "sale" | "purchase" {
@@ -438,12 +471,11 @@ router.get("/bgg/geeklist", async (req, res) => {
 
       // ── Case 3: Items by others where the user appears as buyer ──────────────
 
-      // 3a: BGG [user=] tag in body must match username exactly.
-      // If a sold-to username exists and is not this user, skip this item.
+      // 3a: "Sold to" block explicitly names this user (tag, @handle, profile URL, or plain username).
+      // If an explicit sold-to username exists and is not this user, skip this item.
       const soldToUsername = parseBuyer(body)?.toLowerCase();
-      if (soldToUsername) {
-        if (soldToUsername !== usernameLower) continue;
-        if (purchaseIntentState.latestSignal === "cancel") continue;
+      if (soldToUsername || soldContextMentionsUsername(body, usernameLower)) {
+        if (soldToUsername && soldToUsername !== usernameLower) continue;
         items.push({
           id: String(item["@_id"] ?? Math.random()),
           gameTitle: objectname,
@@ -460,10 +492,8 @@ router.get("/bgg/geeklist", async (req, res) => {
       // (only evaluated when no explicit sold-to username is present).
       if (
         realNameLower.length > 0 &&
-        body.toLowerCase().includes("sold") &&
-        body.toLowerCase().includes(realNameLower)
+        extractSoldContext(body)?.toLowerCase().includes(realNameLower)
       ) {
-        if (purchaseIntentState.latestSignal === "cancel") continue;
         items.push({
           id: String(item["@_id"] ?? Math.random()),
           gameTitle: objectname,
@@ -482,12 +512,13 @@ router.get("/bgg/geeklist", async (req, res) => {
       // Check for confirmation: sold attribute OR seller said "Sold" / "Sounds good"
       const isSoldByAttr =
         item["@_sold"] === "1" || item["@_sold"] === 1;
+      const isSoldByBody = parseStatus(item, body) === "sold";
       const sellerComments = comments.filter((c) => c.username === itemUsername);
       const sellerConfirmed = sellerComments.some((c) =>
         SELLER_CONFIRMED_RE.test(c.text)
       );
 
-      if (!isSoldByAttr && !sellerConfirmed) continue;
+      if (!isSoldByAttr && !isSoldByBody && !sellerConfirmed) continue;
 
       // Try to get price from the user's purchase-intent comment first
       const intentComment = purchaseIntentState.latestIntentComment;
