@@ -267,7 +267,7 @@ const APO = "['\u2018\u2019]";
 
 // Phrases in a comment that signal purchase intent
 const PURCHASE_INTENT_RE = new RegExp(
-  `\\bi${APO}?ll\\s+take\\s+(this|it|them|all|the\\s+lot)\\b|\\bmine\\b|\\bdibs\\b|\\bi\\s+will\\s+take\\s+(this|it|them)\\b|\\bi\\s+offer\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bmy\\s+offer\\s+is\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bwould\\s+you\\s+take\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bcan\\s+you\\s+do\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bhow\\s+about\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b`,
+  `\\bi${APO}?ll\\s+take\\s+(this|it|them|all|the\\s+lot)\\b|\\bmine\\b|\\bdibs\\b|\\bi\\s+will\\s+take\\s+(this|it|them)\\b|\\bi\\s+offer\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bmy\\s+offer\\s+is\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\boffering\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bi${APO}?m\\s+offering\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bi\\s+am\\s+offering\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bwould\\s+you\\s+take\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bcan\\s+you\\s+do\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bhow\\s+about\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b`,
   "i"
 );
 
