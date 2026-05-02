@@ -17,6 +17,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
         <Label>Dashboard</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="balances">
+        <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
+        <Label>Balances</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -69,6 +73,18 @@ function ClassicTabLayout() {
               <SymbolView name="chart.bar.fill" tintColor={color} size={24} />
             ) : (
               <Feather name="bar-chart-2" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="balances"
+        options={{
+          title: "Balances",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="person.2.fill" tintColor={color} size={24} />
+            ) : (
+              <Feather name="users" size={22} color={color} />
             ),
         }}
       />
