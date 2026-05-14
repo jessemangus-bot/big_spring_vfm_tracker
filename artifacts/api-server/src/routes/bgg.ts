@@ -8,6 +8,7 @@ const BGG_COLLECTION_API_BASE = "https://boardgamegeek.com/xmlapi2/collection";
 const BGG_API_TOKEN_ENV_VAR = "BGG_API_TOKEN";
 const RETRY_DELAY_MS = 3000;
 const RETRY_DELAY_SECONDS = Math.ceil(RETRY_DELAY_MS / 1000);
+const BGG_FETCH_TIMEOUT_MS = 5000;
 
 class BggProcessingError extends Error {
   retryAfterSeconds = RETRY_DELAY_SECONDS;
@@ -18,22 +19,49 @@ class BggProcessingError extends Error {
   }
 }
 
+async function fetchBggXmlText(
+  url: string,
+  apiToken: string,
+  resource: string,
+  errorPrefix: string,
+): Promise<string> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), BGG_FETCH_TIMEOUT_MS);
+
+  try {
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${apiToken}` },
+      signal: controller.signal,
+    });
+
+    if (!resp.ok) {
+      throw new Error(`${errorPrefix} returned ${resp.status}`);
+    }
+
+    const text = await resp.text();
+
+    if (text.includes("accepted and will be processed")) {
+      throw new BggProcessingError(resource);
+    }
+
+    return text;
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new BggProcessingError(resource);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function fetchGeelist(listId: string, apiToken: string): Promise<string> {
-  const resp = await fetch(`${BGG_API_BASE}/${listId}?comments=1`, {
-    headers: { Authorization: `Bearer ${apiToken}` },
-  });
-
-  if (!resp.ok) {
-    throw new Error(`BGG API returned ${resp.status}`);
-  }
-
-  const text = await resp.text();
-
-  if (text.includes("accepted and will be processed")) {
-    throw new BggProcessingError("BGG geeklist");
-  }
-
-  return text;
+  return fetchBggXmlText(
+    `${BGG_API_BASE}/${listId}?comments=1`,
+    apiToken,
+    "BGG geeklist",
+    "BGG API",
+  );
 }
 
 async function fetchCollection(username: string, apiToken: string): Promise<string> {
@@ -42,21 +70,12 @@ async function fetchCollection(username: string, apiToken: string): Promise<stri
     stats: "1",
   });
 
-  const resp = await fetch(`${BGG_COLLECTION_API_BASE}?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${apiToken}` },
-  });
-
-  if (!resp.ok) {
-    throw new Error(`BGG collection API returned ${resp.status}`);
-  }
-
-  const text = await resp.text();
-
-  if (text.includes("accepted and will be processed")) {
-    throw new BggProcessingError("BGG collection");
-  }
-
-  return text;
+  return fetchBggXmlText(
+    `${BGG_COLLECTION_API_BASE}?${params.toString()}`,
+    apiToken,
+    "BGG collection",
+    "BGG collection API",
+  );
 }
 
 function attrIsTrue(value: unknown): boolean {
