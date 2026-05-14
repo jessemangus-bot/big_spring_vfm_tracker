@@ -81,6 +81,11 @@ export default function WishlistScreen() {
         const base = getBaseUrl();
         const resp = await fetch(`${base}/api/bgg/wishlist?${params.toString()}`);
 
+        if (resp.status === 202) {
+          const body = await resp.json().catch(() => ({ error: "BGG is still preparing your data." }));
+          throw new Error(body.error ?? "BGG is still preparing your data. Please try again shortly.");
+        }
+
         if (!resp.ok) {
           const body = await resp.json().catch(() => ({ error: "Unknown error" }));
           throw new Error(body.error ?? `HTTP ${resp.status}`);

@@ -84,6 +84,8 @@ const SETTINGS_KEY = "bgg_vfm_settings_v1";
 const SYNC_KEY = "bgg_vfm_last_synced";
 const AUTO_SYNC_INTERVAL_MS = 60 * 60 * 1000;
 const AUTO_SYNC_POLL_MS = 60 * 1000;
+const BGG_PROCESSING_MAX_ATTEMPTS = 8;
+const BGG_PROCESSING_FALLBACK_DELAY_MS = 3000;
 
 const DEFAULT_SETTINGS: BggSettings = {
   geeklistUrl: DEFAULT_GEEKLIST_URL,
@@ -103,6 +105,24 @@ function normalizeBggSettings(raw: unknown): BggSettings {
   const realName = typeof value.realName === "string" ? value.realName : "";
 
   return { geeklistUrl, username, realName };
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseRetryDelayMs(response: Response, body: any): number {
+  const bodySeconds =
+    typeof body?.retryAfterSeconds === "number" ? body.retryAfterSeconds : null;
+  const headerSeconds = Number(response.headers.get("Retry-After"));
+  const seconds =
+    bodySeconds && bodySeconds > 0
+      ? bodySeconds
+      : Number.isFinite(headerSeconds) && headerSeconds > 0
+      ? headerSeconds
+      : null;
+
+  return seconds ? seconds * 1000 : BGG_PROCESSING_FALLBACK_DELAY_MS;
 }
 
 export function VFMProvider({ children }: { children: React.ReactNode }) {
@@ -232,7 +252,28 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
         if (settings.realName) params.set("realName", settings.realName);
 
         const base = getBaseUrl();
-        const resp = await fetch(`${base}/api/bgg/geeklist?${params.toString()}`);
+        const syncUrl = `${base}/api/bgg/geeklist?${params.toString()}`;
+        let resp: Response | null = null;
+
+        for (let attempt = 0; attempt < BGG_PROCESSING_MAX_ATTEMPTS; attempt++) {
+          resp = await fetch(syncUrl);
+
+          if (resp.status !== 202) break;
+
+          if (attempt === BGG_PROCESSING_MAX_ATTEMPTS - 1) break;
+
+          const body = await resp.json().catch(() => ({}));
+          const retryDelayMs = parseRetryDelayMs(resp, body);
+          await sleep(retryDelayMs);
+        }
+
+        if (!resp) {
+          throw new Error("Could not sync from BGG.");
+        }
+
+        if (resp.status === 202) {
+          throw new Error("BGG is still preparing the list. Please try refreshing again in a minute.");
+        }
 
         if (!resp.ok) {
           const body = await resp.json().catch(() => ({ error: "Unknown error" }));

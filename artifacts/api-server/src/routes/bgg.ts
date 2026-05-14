@@ -6,33 +6,34 @@ const router: IRouter = Router();
 const BGG_API_BASE = "https://boardgamegeek.com/xmlapi/geeklist";
 const BGG_COLLECTION_API_BASE = "https://boardgamegeek.com/xmlapi2/collection";
 const BGG_API_TOKEN_ENV_VAR = "BGG_API_TOKEN";
-const MAX_RETRIES = 5;
 const RETRY_DELAY_MS = 3000;
+const RETRY_DELAY_SECONDS = Math.ceil(RETRY_DELAY_MS / 1000);
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+class BggProcessingError extends Error {
+  retryAfterSeconds = RETRY_DELAY_SECONDS;
+
+  constructor(resource: string) {
+    super(`${resource} is still being prepared by BGG. Please try again shortly.`);
+    this.name = "BggProcessingError";
+  }
 }
 
 async function fetchGeelist(listId: string, apiToken: string): Promise<string> {
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const resp = await fetch(`${BGG_API_BASE}/${listId}?comments=1`, {
-      headers: { Authorization: `Bearer ${apiToken}` },
-    });
+  const resp = await fetch(`${BGG_API_BASE}/${listId}?comments=1`, {
+    headers: { Authorization: `Bearer ${apiToken}` },
+  });
 
-    if (!resp.ok) {
-      throw new Error(`BGG API returned ${resp.status}`);
-    }
-
-    const text = await resp.text();
-
-    if (text.includes("accepted and will be processed")) {
-      await sleep(RETRY_DELAY_MS);
-      continue;
-    }
-
-    return text;
+  if (!resp.ok) {
+    throw new Error(`BGG API returned ${resp.status}`);
   }
-  throw new Error("BGG API did not respond in time — please try again");
+
+  const text = await resp.text();
+
+  if (text.includes("accepted and will be processed")) {
+    throw new BggProcessingError("BGG geeklist");
+  }
+
+  return text;
 }
 
 async function fetchCollection(username: string, apiToken: string): Promise<string> {
@@ -41,25 +42,21 @@ async function fetchCollection(username: string, apiToken: string): Promise<stri
     stats: "1",
   });
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const resp = await fetch(`${BGG_COLLECTION_API_BASE}?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${apiToken}` },
-    });
+  const resp = await fetch(`${BGG_COLLECTION_API_BASE}?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${apiToken}` },
+  });
 
-    if (!resp.ok) {
-      throw new Error(`BGG collection API returned ${resp.status}`);
-    }
-
-    const text = await resp.text();
-
-    if (text.includes("accepted and will be processed")) {
-      await sleep(RETRY_DELAY_MS);
-      continue;
-    }
-
-    return text;
+  if (!resp.ok) {
+    throw new Error(`BGG collection API returned ${resp.status}`);
   }
-  throw new Error("BGG collection API did not respond in time — please try again");
+
+  const text = await resp.text();
+
+  if (text.includes("accepted and will be processed")) {
+    throw new BggProcessingError("BGG collection");
+  }
+
+  return text;
 }
 
 function attrIsTrue(value: unknown): boolean {
@@ -542,6 +539,17 @@ router.get("/bgg/geeklist", async (req, res) => {
       items,
     });
   } catch (err: any) {
+    if (err instanceof BggProcessingError) {
+      res
+        .status(202)
+        .set("Retry-After", String(err.retryAfterSeconds))
+        .json({
+          error: err.message,
+          retryAfterSeconds: err.retryAfterSeconds,
+        });
+      return;
+    }
+
     req.log.error({ err }, "BGG geeklist fetch failed");
     res.status(502).json({ error: err.message ?? "Failed to fetch geeklist" });
   }
@@ -627,6 +635,17 @@ router.get("/bgg/wishlist", async (req, res) => {
       items,
     });
   } catch (err: any) {
+    if (err instanceof BggProcessingError) {
+      res
+        .status(202)
+        .set("Retry-After", String(err.retryAfterSeconds))
+        .json({
+          error: err.message,
+          retryAfterSeconds: err.retryAfterSeconds,
+        });
+      return;
+    }
+
     req.log.error({ err }, "BGG wishlist match fetch failed");
     res.status(502).json({ error: err.message ?? "Failed to fetch wishlist matches" });
   }
