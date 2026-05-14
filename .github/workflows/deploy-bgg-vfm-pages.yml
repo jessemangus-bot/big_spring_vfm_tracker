@@ -33,7 +33,11 @@ jobs:
       - name: Setup PNPM
         uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 10.25.0
+          dest: ~/setup-pnpm
+          cache: false
+          cache_dependency_path: pnpm-
+        lock.yaml
 
       - name: Setup Node
         uses: actions/setup-node@v4
