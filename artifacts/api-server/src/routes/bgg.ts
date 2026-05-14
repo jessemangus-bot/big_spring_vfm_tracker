@@ -57,7 +57,7 @@ async function fetchBggXmlText(
 
 async function fetchGeelist(listId: string, apiToken: string): Promise<string> {
   return fetchBggXmlText(
-    `${BGG_API_BASE}/${listId}?comments=1`,
+    `${BGG_API_BASE}/${listId}`,
     apiToken,
     "BGG geeklist",
     "BGG API",
