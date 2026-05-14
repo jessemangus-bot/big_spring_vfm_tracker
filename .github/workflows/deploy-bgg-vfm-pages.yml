@@ -41,7 +41,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18 # Changed from '24' to '18', which is a supported version
+          node-version: 24
           cache: pnpm
 
       - name: Setup Pages
