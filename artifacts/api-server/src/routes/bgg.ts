@@ -199,10 +199,14 @@ function parsePriceFromComment(text: unknown): number {
 
 function parseBidAmount(text: unknown): number {
   // Match bid-related dollar amounts: "bid $15", "I'll bid $15", "$15", etc.
-  const bidPattern = /bid\s+\$?\s*([\d.]+)/i;
+  const bidPattern = /bid(?:ding)?\s+\$?\s*([\d.]+)/i;
   const dollarPattern = /\$\s*([\d.]+)/;
+  const bareAmountPattern = /^\s*(\d+(?:\.\d{1,2})?)\s*$/;
   const normalized = stripStruckThroughText(asText(text));
-  const m = normalized.match(bidPattern) ?? normalized.match(dollarPattern);
+  const m =
+    normalized.match(bidPattern) ??
+    normalized.match(dollarPattern) ??
+    normalized.match(bareAmountPattern);
   return m ? parseFloat(m[1]) : 0;
 }
 
@@ -464,24 +468,31 @@ function parseGeeklistXml(
         const myHighestBid = Math.max(...userBidComments.map((c) => parseBidAmount(c.text)));
         const binPrice = parseBinPrice(body);
         const otherBids = comments
-          .filter((c) => c.username !== usernameLower)
+          .filter((c) => c.username !== usernameLower && c.username !== itemUsername)
           .map((c) => parseBidAmount(c.text))
           .filter((v) => v > 0);
         const highestOtherBid = otherBids.length > 0 ? Math.max(...otherBids) : 0;
+        const finalBuyer = parseBuyer(body)?.toLowerCase();
+        const finalPrice = parsePrice(item, body);
+        const status = parseStatus(item, body);
 
         const auctionStatus: "winning" | "outbid" =
-          myHighestBid >= highestOtherBid ? "winning" : "outbid";
+          finalBuyer
+            ? finalBuyer === usernameLower
+              ? "winning"
+              : "outbid"
+            : (myHighestBid >= highestOtherBid ? "winning" : "outbid");
 
-        const isSold = item["@_sold"] === "1" || item["@_sold"] === 1;
+        const isSold = status === "sold";
         const hasReachedBin = binPrice > 0 && myHighestBid >= binPrice;
         const shouldConvertToPurchase =
-          hasReachedBin && auctionStatus === "winning";
+          auctionStatus === "winning" && (hasReachedBin || finalBuyer === usernameLower);
 
         if (shouldConvertToPurchase) {
           items.push({
             id: String(item["@_id"] ?? Math.random()),
             gameTitle: objectname,
-            price: binPrice,
+            price: finalPrice > 0 ? finalPrice : (binPrice > 0 ? binPrice : myHighestBid),
             type: "purchase",
             status: "sold",
             buyerSeller: item["@_username"],
