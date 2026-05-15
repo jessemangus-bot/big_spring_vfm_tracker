@@ -9,6 +9,9 @@ const BGG_API_TOKEN_ENV_VAR = "BGG_API_TOKEN";
 const RETRY_DELAY_MS = 3000;
 const RETRY_DELAY_SECONDS = Math.ceil(RETRY_DELAY_MS / 1000);
 const BGG_FETCH_TIMEOUT_MS = 5000;
+const BGG_COMMENT_FETCH_TIMEOUT_MS = 15000;
+const COMMENT_CACHE_TTL_MS = 60 * 60 * 1000;
+const COMMENT_BACKGROUND_MAX_ATTEMPTS = 12;
 
 class BggProcessingError extends Error {
   retryAfterSeconds = RETRY_DELAY_SECONDS;
@@ -24,9 +27,10 @@ async function fetchBggXmlText(
   apiToken: string,
   resource: string,
   errorPrefix: string,
+  timeoutMs = BGG_FETCH_TIMEOUT_MS,
 ): Promise<string> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), BGG_FETCH_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const resp = await fetch(url, {
@@ -55,12 +59,17 @@ async function fetchBggXmlText(
   }
 }
 
-async function fetchGeelist(listId: string, apiToken: string): Promise<string> {
+async function fetchGeelist(
+  listId: string,
+  apiToken: string,
+  includeComments = false,
+): Promise<string> {
   return fetchBggXmlText(
-    `${BGG_API_BASE}/${listId}`,
+    `${BGG_API_BASE}/${listId}${includeComments ? "?comments=1" : ""}`,
     apiToken,
-    "BGG geeklist",
+    includeComments ? "BGG geeklist comments" : "BGG geeklist",
     "BGG API",
+    includeComments ? BGG_COMMENT_FETCH_TIMEOUT_MS : BGG_FETCH_TIMEOUT_MS,
   );
 }
 
@@ -111,6 +120,10 @@ function parseCollectionMatchMap(collectionXml: string): Map<string, WishlistMat
   }
 
   return matchMap;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function stripBBCode(text: string): string {
@@ -366,6 +379,262 @@ interface ParsedItem {
   notes?: string;
 }
 
+interface ParsedGeeklistData {
+  listTitle: string;
+  totalItems: number;
+  items: ParsedItem[];
+}
+
+type CommentEnrichmentStatus = "warming" | "refreshing" | "ready" | "error";
+
+interface CommentCacheEntry {
+  status: CommentEnrichmentStatus;
+  xml?: string;
+  updatedAt?: number;
+  startedAt?: number;
+  error?: string;
+  promise?: Promise<void>;
+}
+
+const commentGeeklistCache = new Map<string, CommentCacheEntry>();
+
+function parseGeeklistXml(
+  xml: string,
+  username: string,
+  realName: string | undefined,
+): ParsedGeeklistData {
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    isArray: (name) => name === "item" || name === "comment",
+  });
+  const parsed = parser.parse(xml);
+
+  const geeklist = parsed.geeklist;
+  if (!geeklist) {
+    throw new Error("Unexpected BGG API response format");
+  }
+
+  const listTitle: string = geeklist.title ?? "BGG Geeklist";
+  const rawItems: any[] = geeklist.item ?? [];
+  const usernameLower = username.toLowerCase();
+  const realNameLower = (realName ?? "").trim().toLowerCase();
+
+  const items: ParsedItem[] = [];
+
+  for (const item of rawItems) {
+    const itemUsername: string = (item["@_username"] ?? "").toLowerCase();
+    const body: string = asText(item.body);
+    const objectname: string = asText(item["@_objectname"] ?? "Unknown Game");
+    const comments = getComments(item);
+    const purchaseIntentState = getPurchaseIntentState(comments, usernameLower);
+
+    // ── Case 1: Items posted BY the user (their own sale listings) ──────────
+    if (itemUsername === usernameLower) {
+      const type = parseType(body);
+      const status = parseStatus(item, body);
+      const buyer = parseBuyer(body);
+
+      items.push({
+        id: String(item["@_id"] ?? Math.random()),
+        gameTitle: objectname,
+        price: parsePrice(item, body),
+        type,
+        status,
+        buyerSeller: buyer,
+        condition: parseCondition(body),
+      });
+      continue;
+    }
+
+    // ── Case 2: Auction items — check if user has placed a bid ───────────────
+    if (isAuctionItem(body)) {
+      const userBidComments = comments.filter(
+        (c) => c.username === usernameLower && parseBidAmount(c.text) > 0
+      );
+
+      if (userBidComments.length > 0) {
+        const myHighestBid = Math.max(...userBidComments.map((c) => parseBidAmount(c.text)));
+        const binPrice = parseBinPrice(body);
+        const otherBids = comments
+          .filter((c) => c.username !== usernameLower)
+          .map((c) => parseBidAmount(c.text))
+          .filter((v) => v > 0);
+        const highestOtherBid = otherBids.length > 0 ? Math.max(...otherBids) : 0;
+
+        const auctionStatus: "winning" | "outbid" =
+          myHighestBid >= highestOtherBid ? "winning" : "outbid";
+
+        const isSold = item["@_sold"] === "1" || item["@_sold"] === 1;
+        const hasReachedBin = binPrice > 0 && myHighestBid >= binPrice;
+        const shouldConvertToPurchase =
+          hasReachedBin && auctionStatus === "winning";
+
+        if (shouldConvertToPurchase) {
+          items.push({
+            id: String(item["@_id"] ?? Math.random()),
+            gameTitle: objectname,
+            price: binPrice,
+            type: "purchase",
+            status: "sold",
+            buyerSeller: item["@_username"],
+            condition: parseCondition(body),
+          });
+          continue;
+        }
+
+        items.push({
+          id: String(item["@_id"] ?? Math.random()),
+          gameTitle: objectname,
+          price: myHighestBid,
+          type: "auction",
+          status: isSold ? "sold" : "listed",
+          auctionStatus,
+          myBid: myHighestBid,
+          buyerSeller: item["@_username"],
+          condition: parseCondition(body),
+        });
+        continue;
+      }
+    }
+
+    // ── Case 3: Items by others where the user appears as buyer ──────────────
+
+    // 3a: "Sold to" block explicitly names this user (tag, @handle, profile URL, or plain username).
+    // If an explicit sold-to username exists and is not this user, skip this item.
+    const soldToUsername = parseBuyer(body)?.toLowerCase();
+    if (soldToUsername || soldContextMentionsUsername(body, usernameLower)) {
+      if (soldToUsername && soldToUsername !== usernameLower) continue;
+      items.push({
+        id: String(item["@_id"] ?? Math.random()),
+        gameTitle: objectname,
+        price: parsePrice(item, body),
+        type: "purchase",
+        status: "sold",
+        buyerSeller: item["@_username"],
+        condition: parseCondition(body),
+      });
+      continue;
+    }
+
+    // 3b: Seller typed the real name instead of a BGG tag
+    // (only evaluated when no explicit sold-to username is present).
+    if (
+      realNameLower.length > 0 &&
+      extractSoldContext(body)?.toLowerCase().includes(realNameLower)
+    ) {
+      items.push({
+        id: String(item["@_id"] ?? Math.random()),
+        gameTitle: objectname,
+        price: parsePrice(item, body),
+        type: "purchase",
+        status: "sold",
+        buyerSeller: item["@_username"],
+        condition: parseCondition(body),
+      });
+      continue;
+    }
+
+    // ── Case 4: Comments — user said "I'll take this" and wasn't cancelled ──
+    if (!purchaseIntentState.hasActiveIntent) continue;
+
+    // Check for confirmation: sold attribute OR seller said "Sold" / "Sounds good"
+    const isSoldByAttr =
+      item["@_sold"] === "1" || item["@_sold"] === 1;
+    const isSoldByBody = parseStatus(item, body) === "sold";
+    const sellerComments = comments.filter((c) => c.username === itemUsername);
+    const sellerConfirmed = sellerComments.some((c) =>
+      SELLER_CONFIRMED_RE.test(c.text)
+    );
+
+    if (!isSoldByAttr && !isSoldByBody && !sellerConfirmed) continue;
+
+    // Try to get price from the user's purchase-intent comment first
+    const intentComment = purchaseIntentState.latestIntentComment;
+    const commentPrice = intentComment ? parsePriceFromComment(intentComment.text) : 0;
+    const finalPrice = commentPrice > 0 ? commentPrice : parsePrice(item, body);
+
+    items.push({
+      id: String(item["@_id"] ?? Math.random()),
+      gameTitle: objectname,
+      price: finalPrice,
+      type: "purchase",
+      status: "sold",
+      buyerSeller: item["@_username"],
+      condition: parseCondition(body),
+    });
+  }
+
+  return {
+    listTitle,
+    totalItems: rawItems.length,
+    items,
+  };
+}
+
+function mergeParsedItems(fastItems: ParsedItem[], enrichedItems: ParsedItem[]): ParsedItem[] {
+  const byId = new Map<string, ParsedItem>();
+  for (const item of fastItems) byId.set(item.id, item);
+  for (const item of enrichedItems) byId.set(item.id, item);
+  return Array.from(byId.values());
+}
+
+function ensureCommentGeeklistWarming(
+  listId: string,
+  apiToken: string,
+  log: { warn: (...args: any[]) => void },
+): CommentCacheEntry {
+  const now = Date.now();
+  const cacheKey = listId;
+  const existing = commentGeeklistCache.get(cacheKey);
+  const hasFreshXml =
+    existing?.xml && existing.updatedAt && now - existing.updatedAt < COMMENT_CACHE_TTL_MS;
+
+  if (existing?.promise || hasFreshXml) {
+    return existing;
+  }
+
+  const entry: CommentCacheEntry =
+    existing ?? {
+      status: "warming",
+    };
+  entry.status = entry.xml ? "refreshing" : "warming";
+  entry.startedAt = now;
+  entry.error = undefined;
+
+  entry.promise = (async () => {
+    try {
+      for (let attempt = 0; attempt < COMMENT_BACKGROUND_MAX_ATTEMPTS; attempt++) {
+        try {
+          const xml = await fetchGeelist(listId, apiToken, true);
+          entry.xml = xml;
+          entry.updatedAt = Date.now();
+          entry.status = "ready";
+          entry.error = undefined;
+          return;
+        } catch (err: any) {
+          if (!(err instanceof BggProcessingError)) throw err;
+          entry.error = err.message;
+          if (attempt < COMMENT_BACKGROUND_MAX_ATTEMPTS - 1) {
+            await sleep(RETRY_DELAY_MS);
+          }
+        }
+      }
+      entry.status = entry.xml ? "ready" : "error";
+      entry.error = "BGG comments were still processing after background retries.";
+    } catch (err: any) {
+      entry.status = entry.xml ? "ready" : "error";
+      entry.error = err?.message ?? "Failed to refresh BGG comments.";
+      log.warn({ err }, "BGG comment enrichment failed");
+    } finally {
+      entry.promise = undefined;
+    }
+  })();
+
+  commentGeeklistCache.set(cacheKey, entry);
+  return entry;
+}
+
 router.get("/bgg/geeklist", async (req, res) => {
   const { listId, username, realName } = req.query as Record<string, string>;
 
@@ -388,174 +657,37 @@ router.get("/bgg/geeklist", async (req, res) => {
 
   try {
     const xml = await fetchGeelist(listId, apiToken);
+    const fastData = parseGeeklistXml(xml, username, realName);
+    const commentEntry = ensureCommentGeeklistWarming(listId, apiToken, req.log);
 
-    const parser = new XMLParser({
-      ignoreAttributes: false,
-      attributeNamePrefix: "@_",
-      isArray: (name) => name === "item" || name === "comment",
-    });
-    const parsed = parser.parse(xml);
+    let items = fastData.items;
+    let commentEnrichmentStatus = commentEntry.status;
+    let commentEnrichedAt = commentEntry.updatedAt
+      ? new Date(commentEntry.updatedAt).toISOString()
+      : null;
+    let commentItems = 0;
 
-    const geeklist = parsed.geeklist;
-    if (!geeklist) {
-      res.status(502).json({ error: "Unexpected BGG API response format" });
-      return;
-    }
-
-    const listTitle: string = geeklist.title ?? "BGG Geeklist";
-    const rawItems: any[] = geeklist.item ?? [];
-    const usernameLower = username.toLowerCase();
-    const realNameLower = (realName ?? "").trim().toLowerCase();
-
-    const items: ParsedItem[] = [];
-
-    for (const item of rawItems) {
-      const itemUsername: string = (item["@_username"] ?? "").toLowerCase();
-      const body: string = asText(item.body);
-      const objectname: string = asText(item["@_objectname"] ?? "Unknown Game");
-      const comments = getComments(item);
-      const purchaseIntentState = getPurchaseIntentState(comments, usernameLower);
-
-      // ── Case 1: Items posted BY the user (their own sale listings) ──────────
-      if (itemUsername === usernameLower) {
-        const type = parseType(body);
-        const status = parseStatus(item, body);
-        const buyer = parseBuyer(body);
-
-        items.push({
-          id: String(item["@_id"] ?? Math.random()),
-          gameTitle: objectname,
-          price: parsePrice(item, body),
-          type,
-          status,
-          buyerSeller: buyer,
-          condition: parseCondition(body),
-        });
-        continue;
+    if (commentEntry.xml) {
+      try {
+        const enrichedData = parseGeeklistXml(commentEntry.xml, username, realName);
+        commentItems = enrichedData.items.length;
+        items = mergeParsedItems(fastData.items, enrichedData.items);
+      } catch (err: any) {
+        req.log.warn({ err }, "Cached BGG comment enrichment could not be parsed");
+        commentEnrichmentStatus = "error";
       }
-
-      // ── Case 2: Auction items — check if user has placed a bid ───────────────
-      if (isAuctionItem(body)) {
-        const userBidComments = comments.filter(
-          (c) => c.username === usernameLower && parseBidAmount(c.text) > 0
-        );
-
-        if (userBidComments.length > 0) {
-          const myHighestBid = Math.max(...userBidComments.map((c) => parseBidAmount(c.text)));
-          const binPrice = parseBinPrice(body);
-          const otherBids = comments
-            .filter((c) => c.username !== usernameLower)
-            .map((c) => parseBidAmount(c.text))
-            .filter((v) => v > 0);
-          const highestOtherBid = otherBids.length > 0 ? Math.max(...otherBids) : 0;
-
-          const auctionStatus: "winning" | "outbid" =
-            myHighestBid >= highestOtherBid ? "winning" : "outbid";
-
-          const isSold = item["@_sold"] === "1" || item["@_sold"] === 1;
-          const hasReachedBin = binPrice > 0 && myHighestBid >= binPrice;
-          const shouldConvertToPurchase =
-            hasReachedBin && auctionStatus === "winning";
-
-          if (shouldConvertToPurchase) {
-            items.push({
-              id: String(item["@_id"] ?? Math.random()),
-              gameTitle: objectname,
-              price: binPrice,
-              type: "purchase",
-              status: "sold",
-              buyerSeller: item["@_username"],
-              condition: parseCondition(body),
-            });
-            continue;
-          }
-
-          items.push({
-            id: String(item["@_id"] ?? Math.random()),
-            gameTitle: objectname,
-            price: myHighestBid,
-            type: "auction",
-            status: isSold ? "sold" : "listed",
-            auctionStatus,
-            myBid: myHighestBid,
-            buyerSeller: item["@_username"],
-            condition: parseCondition(body),
-          });
-          continue;
-        }
-      }
-
-      // ── Case 3: Items by others where the user appears as buyer ──────────────
-
-      // 3a: "Sold to" block explicitly names this user (tag, @handle, profile URL, or plain username).
-      // If an explicit sold-to username exists and is not this user, skip this item.
-      const soldToUsername = parseBuyer(body)?.toLowerCase();
-      if (soldToUsername || soldContextMentionsUsername(body, usernameLower)) {
-        if (soldToUsername && soldToUsername !== usernameLower) continue;
-        items.push({
-          id: String(item["@_id"] ?? Math.random()),
-          gameTitle: objectname,
-          price: parsePrice(item, body),
-          type: "purchase",
-          status: "sold",
-          buyerSeller: item["@_username"],
-          condition: parseCondition(body),
-        });
-        continue;
-      }
-
-      // 3b: Seller typed the real name instead of a BGG tag
-      // (only evaluated when no explicit sold-to username is present).
-      if (
-        realNameLower.length > 0 &&
-        extractSoldContext(body)?.toLowerCase().includes(realNameLower)
-      ) {
-        items.push({
-          id: String(item["@_id"] ?? Math.random()),
-          gameTitle: objectname,
-          price: parsePrice(item, body),
-          type: "purchase",
-          status: "sold",
-          buyerSeller: item["@_username"],
-          condition: parseCondition(body),
-        });
-        continue;
-      }
-
-      // ── Case 4: Comments — user said "I'll take this" and wasn't cancelled ──
-      if (!purchaseIntentState.hasActiveIntent) continue;
-
-      // Check for confirmation: sold attribute OR seller said "Sold" / "Sounds good"
-      const isSoldByAttr =
-        item["@_sold"] === "1" || item["@_sold"] === 1;
-      const isSoldByBody = parseStatus(item, body) === "sold";
-      const sellerComments = comments.filter((c) => c.username === itemUsername);
-      const sellerConfirmed = sellerComments.some((c) =>
-        SELLER_CONFIRMED_RE.test(c.text)
-      );
-
-      if (!isSoldByAttr && !isSoldByBody && !sellerConfirmed) continue;
-
-      // Try to get price from the user's purchase-intent comment first
-      const intentComment = purchaseIntentState.latestIntentComment;
-      const commentPrice = intentComment ? parsePriceFromComment(intentComment.text) : 0;
-      const finalPrice = commentPrice > 0 ? commentPrice : parsePrice(item, body);
-
-      items.push({
-        id: String(item["@_id"] ?? Math.random()),
-        gameTitle: objectname,
-        price: finalPrice,
-        type: "purchase",
-        status: "sold",
-        buyerSeller: item["@_username"],
-        condition: parseCondition(body),
-      });
     }
 
     res.json({
-      listTitle,
-      totalItems: rawItems.length,
+      listTitle: fastData.listTitle,
+      totalItems: fastData.totalItems,
       items,
+      commentEnrichment: {
+        status: commentEnrichmentStatus,
+        enrichedAt: commentEnrichedAt,
+        itemCount: commentItems,
+        retryAfterSeconds: RETRY_DELAY_SECONDS,
+      },
     });
   } catch (err: any) {
     if (err instanceof BggProcessingError) {

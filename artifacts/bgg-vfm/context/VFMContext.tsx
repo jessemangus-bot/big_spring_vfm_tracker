@@ -113,7 +113,11 @@ function sleep(ms: number) {
 
 function parseRetryDelayMs(response: Response, body: any): number {
   const bodySeconds =
-    typeof body?.retryAfterSeconds === "number" ? body.retryAfterSeconds : null;
+    typeof body?.retryAfterSeconds === "number"
+      ? body.retryAfterSeconds
+      : typeof body?.commentEnrichment?.retryAfterSeconds === "number"
+      ? body.commentEnrichment.retryAfterSeconds
+      : null;
   const headerSeconds = Number(response.headers.get("Retry-After"));
   const seconds =
     bodySeconds && bodySeconds > 0
@@ -253,34 +257,50 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
 
         const base = getBaseUrl();
         const syncUrl = `${base}/api/bgg/geeklist?${params.toString()}`;
-        let resp: Response | null = null;
+        let data: any = null;
 
         for (let attempt = 0; attempt < BGG_PROCESSING_MAX_ATTEMPTS; attempt++) {
-          resp = await fetch(syncUrl);
-
-          if (resp.status !== 202) break;
-
-          if (attempt === BGG_PROCESSING_MAX_ATTEMPTS - 1) break;
-
+          const resp = await fetch(syncUrl);
           const body = await resp.json().catch(() => ({}));
-          const retryDelayMs = parseRetryDelayMs(resp, body);
-          await sleep(retryDelayMs);
+
+          if (resp.status === 202) {
+            if (attempt === BGG_PROCESSING_MAX_ATTEMPTS - 1) {
+              throw new Error("BGG is still preparing the list. Please try refreshing again in a minute.");
+            }
+
+            await sleep(parseRetryDelayMs(resp, body));
+            continue;
+          }
+
+          if (!resp.ok) {
+            throw new Error(body.error ?? `HTTP ${resp.status}`);
+          }
+
+          data = body;
+          const enrichmentStatus = data?.commentEnrichment?.status;
+          const enrichmentItemCount =
+            typeof data?.commentEnrichment?.itemCount === "number"
+              ? data.commentEnrichment.itemCount
+              : 0;
+          const canWaitForCommentEnrichment =
+            enrichmentItemCount === 0 &&
+            (enrichmentStatus === "warming" || enrichmentStatus === "refreshing");
+
+          if (
+            canWaitForCommentEnrichment &&
+            attempt < BGG_PROCESSING_MAX_ATTEMPTS - 1
+          ) {
+            await sleep(parseRetryDelayMs(resp, data));
+            continue;
+          }
+
+          break;
         }
 
-        if (!resp) {
+        if (!data) {
           throw new Error("Could not sync from BGG.");
         }
 
-        if (resp.status === 202) {
-          throw new Error("BGG is still preparing the list. Please try refreshing again in a minute.");
-        }
-
-        if (!resp.ok) {
-          const body = await resp.json().catch(() => ({ error: "Unknown error" }));
-          throw new Error(body.error ?? `HTTP ${resp.status}`);
-        }
-
-        const data = await resp.json();
         const { items, listTitle } = data;
 
         const mapped = items.map((item: any) => ({
