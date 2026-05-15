@@ -12,6 +12,8 @@ const BGG_FETCH_TIMEOUT_MS = 5000;
 const BGG_COMMENT_FETCH_TIMEOUT_MS = 15000;
 const COMMENT_CACHE_TTL_MS = 60 * 60 * 1000;
 const COMMENT_BACKGROUND_MAX_ATTEMPTS = 12;
+const BGG_XML_ENTITY_EXPANSION_LIMIT = 250_000;
+const BGG_XML_EXPANDED_LENGTH_LIMIT = 5 * 1024 * 1024;
 
 class BggProcessingError extends Error {
   retryAfterSeconds = RETRY_DELAY_SECONDS;
@@ -93,12 +95,21 @@ function attrIsTrue(value: unknown): boolean {
 
 type WishlistMatchType = "wishlist" | "want_in_trade" | "want_to_buy";
 
-function parseCollectionMatchMap(collectionXml: string): Map<string, WishlistMatchType[]> {
-  const parser = new XMLParser({
+function createBggXmlParser(arrayNodeNames: readonly string[]) {
+  return new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: "@_",
-    isArray: (name) => name === "item",
+    processEntities: {
+      enabled: true,
+      maxTotalExpansions: BGG_XML_ENTITY_EXPANSION_LIMIT,
+      maxExpandedLength: BGG_XML_EXPANDED_LENGTH_LIMIT,
+    },
+    isArray: (name: string) => arrayNodeNames.includes(name),
   });
+}
+
+function parseCollectionMatchMap(collectionXml: string): Map<string, WishlistMatchType[]> {
+  const parser = createBggXmlParser(["item"]);
   const parsed = parser.parse(collectionXml);
   const rawItems: any[] = parsed.items?.item ?? [];
   const matchMap = new Map<string, WishlistMatchType[]>();
@@ -403,11 +414,7 @@ function parseGeeklistXml(
   username: string,
   realName: string | undefined,
 ): ParsedGeeklistData {
-  const parser = new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: "@_",
-    isArray: (name) => name === "item" || name === "comment",
-  });
+  const parser = createBggXmlParser(["item", "comment"]);
   const parsed = parser.parse(xml);
 
   const geeklist = parsed.geeklist;
@@ -732,11 +739,7 @@ router.get("/bgg/wishlist", async (req, res) => {
       fetchCollection(username, apiToken),
     ]);
 
-    const parser = new XMLParser({
-      ignoreAttributes: false,
-      attributeNamePrefix: "@_",
-      isArray: (name) => name === "item" || name === "comment",
-    });
+    const parser = createBggXmlParser(["item", "comment"]);
     const parsed = parser.parse(geeklistXml);
 
     const geeklist = parsed.geeklist;
