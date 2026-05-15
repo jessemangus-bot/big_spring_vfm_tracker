@@ -152,6 +152,7 @@ function asText(value: unknown): string {
 
 function stripStruckThroughText(text: string): string {
   return text
+    .replace(/\[-\][\s\S]*?\[\/-\]/g, " ")
     .replace(/\[(?:s|strike|del)\b[^\]]*][\s\S]*?\[\/(?:s|strike|del)\]/gi, " ")
     .replace(/<(?:s|strike|del)\b[^>]*>[\s\S]*?<\/(?:s|strike|del)>/gi, " ")
     .replace(
@@ -161,40 +162,53 @@ function stripStruckThroughText(text: string): string {
     .replace(/~~[^~]+~~/g, " ");
 }
 
+function findPrice(text: string, patterns: RegExp[]): number | undefined {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+
+    const price = parseFloat(match[1]);
+    if (Number.isFinite(price) && price > 0) return price;
+  }
+
+  return undefined;
+}
+
+function parsePriceFromText(text: string, patterns: RegExp[]): number {
+  const textWithoutStrikes = stripStruckThroughText(text);
+  const activePrice = findPrice(textWithoutStrikes, patterns);
+  if (activePrice) return activePrice;
+
+  const fallbackPrice =
+    textWithoutStrikes === text ? undefined : findPrice(text, patterns);
+
+  return fallbackPrice ?? 0;
+}
+
 function parsePrice(item: any, body: string): number {
-  const searchableBody = stripStruckThroughText(body);
-  const hadStruckText = searchableBody !== body;
   const patterns = [
     /(?:BIN|FP):\[\/B\]\s*\$?([\d.]+)/i,
     /(?:BIN|FP):\s*\$?([\d.]+)/i,
     /\$\s*([\d.]+)/,
   ];
-  for (const pat of patterns) {
-    const m = searchableBody.match(pat);
-    if (m) return parseFloat(m[1]);
-  }
-
-  // If the listing contains struck-through text, avoid stale @_price fallback.
-  if (hadStruckText) return 0;
+  const bodyPrice = parsePriceFromText(body, patterns);
+  if (bodyPrice > 0) return bodyPrice;
 
   const attrPrice = parseFloat(item["@_price"]);
-  if (!isNaN(attrPrice) && attrPrice > 0) return attrPrice;
+  if (Number.isFinite(attrPrice) && attrPrice > 0) return attrPrice;
 
   return 0;
 }
 
 function parseBinPrice(body: string): number {
-  const searchableBody = stripStruckThroughText(body);
-  const m =
-    searchableBody.match(/BIN:\[\/B\]\s*\$?\s*([\d.]+)/i) ??
-    searchableBody.match(/\bBIN:\s*\$?\s*([\d.]+)/i);
-  return m ? parseFloat(m[1]) : 0;
+  return parsePriceFromText(body, [
+    /BIN:\[\/B\]\s*\$?\s*([\d.]+)/i,
+    /\bBIN:\s*\$?\s*([\d.]+)/i,
+  ]);
 }
 
 function parsePriceFromComment(text: unknown): number {
-  const searchableText = stripStruckThroughText(asText(text));
-  const m = searchableText.match(/\$\s*([\d.]+)/);
-  return m ? parseFloat(m[1]) : 0;
+  return parsePriceFromText(asText(text), [/\$\s*([\d.]+)/]);
 }
 
 function parseBidAmount(text: unknown): number {
