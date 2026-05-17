@@ -142,7 +142,7 @@ function pickBggLocalOverrides(game: Game): BggLocalOverrides {
   const overrides: BggLocalOverrides = {};
 
   for (const key of BGG_LOCAL_OVERRIDE_KEYS) {
-    const value = (game as Record<string, unknown>)[key];
+    const value = (game as unknown as Record<string, unknown>)[key];
     if (hasOwn(game, key) && value !== undefined) {
       (overrides as Record<string, unknown>)[key] = value;
     }
@@ -184,9 +184,9 @@ function applyBggLocalOverrides(game: Game, overrides: BggLocalOverrides): Game 
 
     const value = overrides[key];
     if (value === null) {
-      delete (merged as Record<string, unknown>)[key];
+      delete (merged as unknown as Record<string, unknown>)[key];
     } else if (value !== undefined) {
-      (merged as Record<string, unknown>)[key] = value;
+      (merged as unknown as Record<string, unknown>)[key] = value;
     }
   }
 

@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
-import React, { useMemo } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -33,6 +34,8 @@ interface ExchangeItem {
   bggUrl?: string;
 }
 
+const SETTLED_USERS_KEY = "bgg_vfm_settled_users_v1";
+
 function getUser(game: Game) {
   const user = game.buyerSeller?.trim();
   return user && user.length > 0 ? user : "Unknown user";
@@ -52,9 +55,41 @@ export default function BalancesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { games } = useVFM();
+  const [settledUsers, setSettledUsers] = useState<Record<string, boolean>>({});
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : 0;
+
+  useEffect(() => {
+    AsyncStorage.getItem(SETTLED_USERS_KEY).then((raw) => {
+      if (!raw) return;
+
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          const settled = Object.fromEntries(
+            Object.entries(parsed as Record<string, unknown>).filter(
+              ([, value]) => value === true
+            )
+          ) as Record<string, boolean>;
+          setSettledUsers(settled);
+        }
+      } catch {}
+    });
+  }, []);
+
+  const toggleSettled = useCallback((username: string) => {
+    setSettledUsers((current) => {
+      const next = { ...current, [username]: !current[username] };
+
+      if (!next[username]) {
+        delete next[username];
+      }
+
+      AsyncStorage.setItem(SETTLED_USERS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   const balances = useMemo(() => {
     const byUser = new Map<string, UserBalance>();
@@ -141,6 +176,7 @@ export default function BalancesScreen() {
   const renderBalance = ({ item }: { item: UserBalance }) => {
     const isPositive = item.delta > 0;
     const isNegative = item.delta < 0;
+    const isSettled = !!settledUsers[item.username];
     const deltaColor = isPositive
       ? colors.success
       : isNegative
@@ -151,6 +187,7 @@ export default function BalancesScreen() {
       : isNegative
       ? "You owe them"
       : "Settled";
+    const statusColor = isSettled ? colors.success : deltaColor;
 
     return (
       <View style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -160,6 +197,24 @@ export default function BalancesScreen() {
 
         <View style={styles.rowMain}>
           <View style={styles.rowHeader}>
+            <TouchableOpacity
+              style={[
+                styles.checkbox,
+                {
+                  backgroundColor: isSettled ? colors.success : colors.card,
+                  borderColor: isSettled ? colors.success : colors.border,
+                },
+              ]}
+              onPress={() => toggleSettled(item.username)}
+              activeOpacity={0.75}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isSettled }}
+              accessibilityLabel={`Mark exchange with ${item.username} as made`}
+            >
+              {isSettled ? (
+                <Feather name="check" size={15} color={colors.primaryForeground} />
+              ) : null}
+            </TouchableOpacity>
             <Text style={[styles.username, { color: colors.foreground }]} numberOfLines={1}>
               {item.username}
             </Text>
@@ -168,8 +223,8 @@ export default function BalancesScreen() {
             </Text>
           </View>
 
-          <Text style={[styles.deltaLabel, { color: deltaColor }]}>
-            {deltaLabel}
+          <Text style={[styles.deltaLabel, { color: statusColor }]}>
+            {isSettled ? "Exchange made" : deltaLabel}
           </Text>
 
           <View style={styles.amountGrid}>
@@ -410,6 +465,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
   username: {
     flex: 1,
