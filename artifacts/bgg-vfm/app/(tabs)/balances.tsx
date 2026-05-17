@@ -1,10 +1,13 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import {
+  Alert,
   FlatList,
+  Linking,
   Platform,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,6 +22,15 @@ interface UserBalance {
   delta: number;
   soldCount: number;
   purchaseCount: number;
+  items: ExchangeItem[];
+}
+
+interface ExchangeItem {
+  id: string;
+  title: string;
+  price: number;
+  direction: "sold" | "purchased";
+  bggUrl?: string;
 }
 
 function getUser(game: Game) {
@@ -28,6 +40,12 @@ function getUser(game: Game) {
 
 function money(value: number) {
   return `$${Math.abs(value).toFixed(2)}`;
+}
+
+function openBggUrl(url: string) {
+  Linking.openURL(url).catch(() => {
+    Alert.alert("Could not open link", url);
+  });
 }
 
 export default function BalancesScreen() {
@@ -56,26 +74,55 @@ export default function BalancesScreen() {
           delta: 0,
           soldCount: 0,
           purchaseCount: 0,
+          items: [],
         };
 
       if (isEarnedSale) {
         current.earned += game.price;
         current.soldCount += 1;
+        current.items.push({
+          id: game.id,
+          title: game.title,
+          price: game.price,
+          direction: "sold",
+          bggUrl: game.bggUrl,
+        });
       } else {
         current.owed += game.price;
         current.purchaseCount += 1;
+        current.items.push({
+          id: game.id,
+          title: game.title,
+          price: game.price,
+          direction: "purchased",
+          bggUrl: game.bggUrl,
+        });
       }
 
       current.delta = current.earned - current.owed;
       byUser.set(username, current);
     });
 
-    return Array.from(byUser.values()).sort((a, b) =>
-      a.username.localeCompare(b.username, undefined, {
-        sensitivity: "base",
-        numeric: true,
-      })
-    );
+    return Array.from(byUser.values())
+      .map((user) => ({
+        ...user,
+        items: user.items.sort((a, b) => {
+          if (a.direction !== b.direction) {
+            return a.direction === "sold" ? -1 : 1;
+          }
+
+          return a.title.localeCompare(b.title, undefined, {
+            sensitivity: "base",
+            numeric: true,
+          });
+        }),
+      }))
+      .sort((a, b) =>
+        a.username.localeCompare(b.username, undefined, {
+          sensitivity: "base",
+          numeric: true,
+        })
+      );
   }, [games]);
 
   const totals = useMemo(
@@ -147,6 +194,66 @@ export default function BalancesScreen() {
           <Text style={[styles.counts, { color: colors.mutedForeground }]}>
             {item.soldCount} sold · {item.purchaseCount} purchased
           </Text>
+
+          <View style={[styles.exchangeList, { borderTopColor: colors.border }]}>
+            {item.items.map((exchange) => {
+              const isSold = exchange.direction === "sold";
+              const accentColor = isSold ? colors.success : colors.destructive;
+              const content = (
+                <>
+                  <View
+                    style={[
+                      styles.exchangeIcon,
+                      { backgroundColor: accentColor + "18" },
+                    ]}
+                  >
+                    <Feather
+                      name={isSold ? "arrow-down-left" : "arrow-up-right"}
+                      size={13}
+                      color={accentColor}
+                    />
+                  </View>
+                  <View style={styles.exchangeInfo}>
+                    <Text
+                      style={[styles.exchangeTitle, { color: colors.foreground }]}
+                      numberOfLines={1}
+                    >
+                      {exchange.title}
+                    </Text>
+                    <Text style={[styles.exchangeMeta, { color: colors.mutedForeground }]}>
+                      {isSold ? "You receive payment" : "You pick up"} · {money(exchange.price)}
+                    </Text>
+                  </View>
+                  {exchange.bggUrl ? (
+                    <Feather
+                      name="external-link"
+                      size={12}
+                      color={colors.mutedForeground}
+                    />
+                  ) : null}
+                </>
+              );
+
+              if (exchange.bggUrl) {
+                return (
+                  <TouchableOpacity
+                    key={exchange.id}
+                    style={styles.exchangeRow}
+                    onPress={() => openBggUrl(exchange.bggUrl!)}
+                    activeOpacity={0.65}
+                  >
+                    {content}
+                  </TouchableOpacity>
+                );
+              }
+
+              return (
+                <View key={exchange.id} style={styles.exchangeRow}>
+                  {content}
+                </View>
+              );
+            })}
+          </View>
         </View>
       </View>
     );
@@ -341,6 +448,37 @@ const styles = StyleSheet.create({
   counts: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
+  },
+  exchangeList: {
+    borderTopWidth: 1,
+    paddingTop: 8,
+    gap: 8,
+  },
+  exchangeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 34,
+  },
+  exchangeIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  exchangeInfo: {
+    flex: 1,
+  },
+  exchangeTitle: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
+  exchangeMeta: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    marginTop: 1,
   },
   empty: {
     alignItems: "center",
