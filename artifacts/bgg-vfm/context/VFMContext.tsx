@@ -28,6 +28,17 @@ export interface Game {
   notes?: string;
   bggUrl?: string;
   source: GameSource;
+  localOverrides?: {
+    title?: string;
+    price?: number;
+    status?: ListingStatus;
+    type?: TransactionType;
+    auctionStatus?: AuctionStatus | null;
+    myBid?: number | null;
+    buyerSeller?: string | null;
+    condition?: string | null;
+    notes?: string | null;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -92,6 +103,108 @@ const DEFAULT_SETTINGS: BggSettings = {
   username: "",
   realName: "",
 };
+
+type BggLocalOverrides = NonNullable<Game["localOverrides"]>;
+
+const BGG_LOCAL_OVERRIDE_KEYS = [
+  "title",
+  "price",
+  "status",
+  "type",
+  "auctionStatus",
+  "myBid",
+  "buyerSeller",
+  "condition",
+  "notes",
+] as const satisfies readonly (keyof BggLocalOverrides)[];
+
+function hasOwn(value: object, key: string) {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function isOptionalOverrideKey(key: keyof BggLocalOverrides) {
+  return (
+    key === "auctionStatus" ||
+    key === "myBid" ||
+    key === "buyerSeller" ||
+    key === "condition" ||
+    key === "notes"
+  );
+}
+
+function hasLocalOverrides(
+  overrides: BggLocalOverrides | undefined,
+): overrides is BggLocalOverrides {
+  return !!overrides && Object.keys(overrides).length > 0;
+}
+
+function pickBggLocalOverrides(game: Game): BggLocalOverrides {
+  const overrides: BggLocalOverrides = {};
+
+  for (const key of BGG_LOCAL_OVERRIDE_KEYS) {
+    const value = (game as Record<string, unknown>)[key];
+    if (hasOwn(game, key) && value !== undefined) {
+      (overrides as Record<string, unknown>)[key] = value;
+    }
+  }
+
+  return overrides;
+}
+
+function mergeBggLocalOverrides(
+  current: BggLocalOverrides | undefined,
+  updates: Partial<Omit<Game, "id" | "createdAt">>,
+): BggLocalOverrides | undefined {
+  const merged: BggLocalOverrides = { ...(current ?? {}) };
+  const updateMap = updates as Partial<Record<keyof BggLocalOverrides, unknown>>;
+
+  for (const key of BGG_LOCAL_OVERRIDE_KEYS) {
+    if (!hasOwn(updateMap, key)) continue;
+
+    const value = updateMap[key];
+    if (value === undefined) {
+      if (isOptionalOverrideKey(key)) {
+        (merged as Record<string, unknown>)[key] = null;
+      } else {
+        delete merged[key];
+      }
+    } else {
+      (merged as Record<string, unknown>)[key] = value;
+    }
+  }
+
+  return hasLocalOverrides(merged) ? merged : undefined;
+}
+
+function applyBggLocalOverrides(game: Game, overrides: BggLocalOverrides): Game {
+  const merged: Game = { ...game, localOverrides: overrides };
+
+  for (const key of BGG_LOCAL_OVERRIDE_KEYS) {
+    if (!hasOwn(overrides, key)) continue;
+
+    const value = overrides[key];
+    if (value === null) {
+      delete (merged as Record<string, unknown>)[key];
+    } else if (value !== undefined) {
+      (merged as Record<string, unknown>)[key] = value;
+    }
+  }
+
+  return merged;
+}
+
+function wasEditedAfterLastSync(game: Game, lastSyncedAt: string | null): boolean {
+  if (!lastSyncedAt) return false;
+
+  const updatedAtMs = Date.parse(game.updatedAt);
+  const lastSyncedAtMs = Date.parse(lastSyncedAt);
+
+  return (
+    Number.isFinite(updatedAtMs) &&
+    Number.isFinite(lastSyncedAtMs) &&
+    updatedAtMs > lastSyncedAtMs
+  );
+}
 
 function normalizeBggSettings(raw: unknown): BggSettings {
   if (!raw || typeof raw !== "object") return DEFAULT_SETTINGS;
@@ -189,7 +302,15 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
       setGames((prev) => {
         const updated = prev.map((g) =>
           g.id === id
-            ? { ...g, ...updates, updatedAt: new Date().toISOString() }
+            ? {
+                ...g,
+                ...updates,
+                localOverrides:
+                  g.source === "bgg"
+                    ? mergeBggLocalOverrides(g.localOverrides, updates)
+                    : g.localOverrides,
+                updatedAt: new Date().toISOString(),
+              }
             : g
         );
         persist(updated);
@@ -215,17 +336,42 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
       const now = new Date().toISOString();
       setGames((prev) => {
         const manualGames = prev.filter((g) => g.source === "manual");
-        const bggGames: Game[] = newGames.map((g) => ({
-          ...g,
-          createdAt: now,
-          updatedAt: now,
-        }));
+        const previousBggGames = new Map(
+          prev.filter((g) => g.source === "bgg").map((g) => [g.id, g]),
+        );
+        const bggGames: Game[] = newGames.map((g) => {
+          const previous = previousBggGames.get(g.id);
+          const freshGame: Game = {
+            ...g,
+            createdAt: previous?.createdAt ?? now,
+            updatedAt: now,
+          };
+          const explicitOverrides = previous?.localOverrides;
+          const inferredOverrides =
+            !hasLocalOverrides(explicitOverrides) &&
+            previous &&
+            wasEditedAfterLastSync(previous, lastSyncedAt)
+              ? pickBggLocalOverrides(previous)
+              : undefined;
+          const localOverrides = hasLocalOverrides(explicitOverrides)
+            ? explicitOverrides
+            : inferredOverrides;
+
+          if (localOverrides && hasLocalOverrides(localOverrides)) {
+            return {
+              ...applyBggLocalOverrides(freshGame, localOverrides),
+              updatedAt: previous?.updatedAt ?? now,
+            };
+          }
+
+          return freshGame;
+        });
         const updated = [...bggGames, ...manualGames];
         persist(updated);
         return updated;
       });
     },
-    [persist]
+    [lastSyncedAt, persist]
   );
 
   const saveBggSettings = useCallback((s: BggSettings) => {

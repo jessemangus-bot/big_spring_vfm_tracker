@@ -241,7 +241,7 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
             ) : null}
 
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-              Syncing replaces all BGG-sourced items with the latest data. Manually added items are never affected.
+              Syncing refreshes BGG-sourced items while keeping your local edits. Manually added items are never affected.
             </Text>
           </View>
 
