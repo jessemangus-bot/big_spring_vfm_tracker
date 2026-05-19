@@ -11,4 +11,6 @@ export type BggItemType = (typeof BggItemType)[keyof typeof BggItemType];
 export const BggItemType = {
   sale: "sale",
   purchase: "purchase",
+  offer: "offer",
+  auction: "auction",
 } as const;

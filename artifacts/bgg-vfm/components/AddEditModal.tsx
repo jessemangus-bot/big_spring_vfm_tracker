@@ -69,7 +69,7 @@ export function AddEditModal({ visible, editGame, onClose }: AddEditModalProps) 
       title: title.trim(),
       price: parsed,
       type,
-      status: type === "purchase" ? ("listed" as ListingStatus) : status,
+      status: type === "purchase" || type === "offer" ? ("listed" as ListingStatus) : status,
       buyerSeller: buyerSeller.trim() || undefined,
       notes: notes.trim() || undefined,
     };
@@ -107,7 +107,7 @@ export function AddEditModal({ visible, editGame, onClose }: AddEditModalProps) 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>TYPE</Text>
           <View style={[styles.segmentRow, { borderColor: colors.border, backgroundColor: colors.secondary }]}>
-            {(["sale", "purchase"] as TransactionType[]).map((t) => (
+            {(["sale", "purchase", "offer"] as TransactionType[]).map((t) => (
               <TouchableOpacity
                 key={t}
                 style={[
@@ -117,7 +117,7 @@ export function AddEditModal({ visible, editGame, onClose }: AddEditModalProps) 
                 onPress={() => setType(t)}
               >
                 <Feather
-                  name={t === "purchase" ? "shopping-bag" : "tag"}
+                  name={t === "purchase" ? "shopping-bag" : t === "offer" ? "clock" : "tag"}
                   size={14}
                   color={type === t ? colors.primary : colors.mutedForeground}
                 />
@@ -127,7 +127,7 @@ export function AddEditModal({ visible, editGame, onClose }: AddEditModalProps) 
                     { color: type === t ? colors.primary : colors.mutedForeground },
                   ]}
                 >
-                  {t === "purchase" ? "Purchase" : "Sale"}
+                  {t === "purchase" ? "Purchase" : t === "offer" ? "Offer" : "Sale"}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -183,7 +183,7 @@ export function AddEditModal({ visible, editGame, onClose }: AddEditModalProps) 
           )}
 
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-            {type === "purchase" ? "SELLER (OPTIONAL)" : "BUYER (OPTIONAL)"}
+            {type === "purchase" || type === "offer" ? "SELLER (OPTIONAL)" : "BUYER (OPTIONAL)"}
           </Text>
           <TextInput
             style={[styles.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }]}

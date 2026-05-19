@@ -399,7 +399,7 @@ interface ParsedItem {
   id: string;
   gameTitle: string;
   price: number;
-  type: "sale" | "purchase" | "auction";
+  type: "sale" | "purchase" | "offer" | "auction";
   status: "listed" | "sold" | "withdrawn" | "expired";
   auctionStatus?: "winning" | "outbid";
   myBid?: number;
@@ -579,19 +579,18 @@ function parseGeeklistXml(
       SELLER_CONFIRMED_RE.test(c.text)
     );
 
-    if (!isSoldByAttr && !isSoldByBody && !sellerConfirmed) continue;
-
     // Try to get price from the user's purchase-intent comment first
     const intentComment = purchaseIntentState.latestIntentComment;
     const commentPrice = intentComment ? parsePriceFromComment(intentComment.text) : 0;
     const finalPrice = commentPrice > 0 ? commentPrice : parsePrice(item, body);
+    const isConfirmed = isSoldByAttr || isSoldByBody || sellerConfirmed;
 
     items.push({
       id: String(item["@_id"] ?? Math.random()),
       gameTitle: objectname,
       price: finalPrice,
-      type: "purchase",
-      status: "sold",
+      type: isConfirmed ? "purchase" : "offer",
+      status: isConfirmed ? "sold" : "listed",
       buyerSeller: item["@_username"],
       condition: parseCondition(body),
     });

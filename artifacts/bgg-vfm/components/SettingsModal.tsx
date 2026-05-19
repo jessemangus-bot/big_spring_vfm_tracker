@@ -63,9 +63,11 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
 
     try {
       const result = await syncFromBgg(settings);
+      const offers = result.offers ?? 0;
       const parts = [
         `${result.sales} listing${result.sales !== 1 ? "s" : ""}`,
         `${result.purchases} purchase${result.purchases !== 1 ? "s" : ""}`,
+        `${offers} offer${offers !== 1 ? "s" : ""}`,
         `${result.auctionsWinning} winning`,
         `${result.auctionsOutbid} outbid`,
       ];

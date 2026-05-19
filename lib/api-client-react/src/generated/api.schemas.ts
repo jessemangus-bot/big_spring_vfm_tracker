@@ -14,6 +14,8 @@ export type BggItemType = (typeof BggItemType)[keyof typeof BggItemType];
 export const BggItemType = {
   sale: "sale",
   purchase: "purchase",
+  offer: "offer",
+  auction: "auction",
 } as const;
 
 export type BggItemStatus = (typeof BggItemStatus)[keyof typeof BggItemStatus];
@@ -31,6 +33,8 @@ export interface BggItem {
   price: number;
   type: BggItemType;
   status: BggItemStatus;
+  auctionStatus?: "winning" | "outbid";
+  myBid?: number;
   buyerSeller?: string;
   condition?: string;
   notes?: string;

@@ -20,7 +20,7 @@ import { StatCard } from "@/components/StatCard";
 import { Game, useVFM } from "@/context/VFMContext";
 import { useColors } from "@/hooks/useColors";
 
-type FilterType = "all" | "listed" | "sold" | "purchase" | "winning" | "outbid";
+type FilterType = "all" | "listed" | "sold" | "purchase" | "offer" | "winning" | "outbid";
 type SortType = "listing" | "title" | "username";
 
 function extractListingNumber(game: Game): number | null {
@@ -53,6 +53,7 @@ export default function HomeScreen() {
     if (filter === "listed") matchFilter = g.type === "sale" && g.status === "listed";
     else if (filter === "sold") matchFilter = g.type === "sale" && g.status === "sold";
     else if (filter === "purchase") matchFilter = g.type === "purchase";
+    else if (filter === "offer") matchFilter = g.type === "offer";
     else if (filter === "winning") matchFilter = g.type === "auction" && g.auctionStatus === "winning";
     else if (filter === "outbid") matchFilter = g.type === "auction" && g.auctionStatus === "outbid";
     const matchSearch =
@@ -241,6 +242,12 @@ export default function HomeScreen() {
                 accent="warning"
               />
               <StatCard
+                label="Offers"
+                value={stats.offerCount}
+                sub="awaiting confirmation"
+                accent="info"
+              />
+              <StatCard
                 label="Auctions Winning"
                 value={stats.winningCount}
                 sub="currently highest bidder"
@@ -309,15 +316,18 @@ export default function HomeScreen() {
                 </View>
 
                 <View style={styles.filterRow}>
-                  {(["all", "listed", "sold", "purchase", "winning", "outbid"] as FilterType[]).map((f) => {
+                  {(["all", "listed", "sold", "purchase", "offer", "winning", "outbid"] as FilterType[]).map((f) => {
                     const label =
                       f === "all" ? "All" :
                       f === "listed" ? "Listed" :
                       f === "sold" ? "Sold" :
                       f === "purchase" ? "Purchased" :
+                      f === "offer" ? "Offers" :
                       f === "winning" ? "Winning" : "Outbid";
                     const isAuctionTab = f === "winning" || f === "outbid";
-                    const activeColor = isAuctionTab
+                    const activeColor = f === "offer"
+                      ? colors.info
+                      : isAuctionTab
                       ? (f === "winning" ? colors.success : colors.destructive)
                       : colors.primary;
                     const isActive = filter === f;

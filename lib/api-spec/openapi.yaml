@@ -111,10 +111,15 @@ components:
           type: number
         type:
           type: string
-          enum: [sale, purchase]
+          enum: [sale, purchase, offer, auction]
         status:
           type: string
           enum: [listed, sold, withdrawn, expired]
+        auctionStatus:
+          type: string
+          enum: [winning, outbid]
+        myBid:
+          type: number
         buyerSeller:
           type: string
         condition:

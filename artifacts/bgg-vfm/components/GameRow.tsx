@@ -21,6 +21,7 @@ export function GameRow({ game, onEdit }: GameRowProps) {
   const { deleteGame } = useVFM();
 
   const isAuction = game.type === "auction";
+  const isOffer = game.type === "offer";
   const isWinning = isAuction && game.auctionStatus === "winning";
   const isOutbid = isAuction && game.auctionStatus === "outbid";
 
@@ -29,6 +30,8 @@ export function GameRow({ game, onEdit }: GameRowProps) {
       ? colors.success
       : isOutbid
       ? colors.destructive
+      : isOffer
+      ? colors.info
       : game.type === "purchase"
       ? colors.warning
       : colors.primary;
@@ -45,6 +48,8 @@ export function GameRow({ game, onEdit }: GameRowProps) {
       ? "trending-up"
       : isOutbid
       ? "trending-down"
+      : isOffer
+      ? "clock"
       : game.type === "purchase"
       ? "shopping-bag"
       : "tag";
@@ -113,6 +118,10 @@ export function GameRow({ game, onEdit }: GameRowProps) {
             {isAuction ? (
               <Text style={[styles.status, { color: typeColor }]}>
                 {isWinning ? "Winning" : "Outbid"}
+              </Text>
+            ) : isOffer ? (
+              <Text style={[styles.status, { color: typeColor }]}>
+                Offer
               </Text>
             ) : game.type === "sale" ? (
               <Text style={[styles.status, { color: statusColor }]}>

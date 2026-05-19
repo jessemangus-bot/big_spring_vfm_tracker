@@ -14,6 +14,8 @@ export interface BggItem {
   price: number;
   type: BggItemType;
   status: BggItemStatus;
+  auctionStatus?: "winning" | "outbid";
+  myBid?: number;
   buyerSeller?: string;
   condition?: string;
   notes?: string;

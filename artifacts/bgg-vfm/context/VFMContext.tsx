@@ -11,7 +11,7 @@ import { AppState } from "react-native";
 import { getBaseUrl } from "@workspace/api-client-react";
 
 export type ListingStatus = "listed" | "sold" | "expired" | "withdrawn";
-export type TransactionType = "sale" | "purchase" | "auction";
+export type TransactionType = "sale" | "purchase" | "offer" | "auction";
 export type AuctionStatus = "winning" | "outbid";
 export type GameSource = "manual" | "bgg";
 
@@ -52,6 +52,7 @@ export interface BggSettings {
 export interface SyncResult {
   sales: number;
   purchases: number;
+  offers: number;
   auctionsWinning: number;
   auctionsOutbid: number;
   listTitle: string;
@@ -75,6 +76,7 @@ interface VFMContextValue {
     listedCount: number;
     soldCount: number;
     purchasedCount: number;
+    offerCount: number;
     winningCount: number;
     outbidCount: number;
     amountOwed: number;
@@ -472,6 +474,7 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
         return {
           sales: mapped.filter((g: any) => g.type === "sale").length,
           purchases: mapped.filter((g: any) => g.type === "purchase").length,
+          offers: mapped.filter((g: any) => g.type === "offer").length,
           auctionsWinning: mapped.filter((g: any) => g.type === "auction" && g.auctionStatus === "winning").length,
           auctionsOutbid: mapped.filter((g: any) => g.type === "auction" && g.auctionStatus === "outbid").length,
           listTitle,
@@ -566,6 +569,7 @@ export function VFMProvider({ children }: { children: React.ReactNode }) {
       (g) => g.type === "sale" && g.status === "sold"
     ).length,
     purchasedCount: games.filter((g) => g.type === "purchase").length,
+    offerCount: games.filter((g) => g.type === "offer").length,
     winningCount: games.filter(
       (g) => g.type === "auction" && g.auctionStatus === "winning"
     ).length,
