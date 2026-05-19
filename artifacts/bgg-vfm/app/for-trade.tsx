@@ -24,6 +24,9 @@ interface ForTradeItem {
   objectId: string;
   gameTitle: string;
   yearPublished?: number;
+  version?: string;
+  language?: string;
+  tradeCondition?: string;
   thumbnail?: string;
   image?: string;
   bggUrl?: string;
@@ -40,14 +43,33 @@ function extractListId(url: string): string | null {
   return match ? match[1] : null;
 }
 
+function extractBggImageId(item: ForTradeItem): string | null {
+  const match = (item.image ?? item.thumbnail ?? "").match(/\/pic(\d+)\./);
+  return match ? match[1] : null;
+}
+
 function buildVfmPostUrl(geeklistUrl: string, item: ForTradeItem): string | null {
   const listId = extractListId(geeklistUrl);
   if (!listId || !item.objectId) return null;
+  const body = [
+    `[B]Version:[/B] ${item.version ?? ""}`,
+    `[B]Language:[/B] ${item.language ?? ""}`,
+    `[B]Condition:[/B] ${item.tradeCondition ?? ""}`,
+    "",
+    "[B]FP:[/B] $",
+  ].join("\n");
 
   const url = new URL(`https://boardgamegeek.com/geeklist/${listId}`);
-  url.searchParams.set("objecttype", "thing");
-  url.searchParams.set("objectid", item.objectId);
-  url.searchParams.set("objectname", item.gameTitle);
+  url.searchParams.set("addListitem", "1");
+  url.searchParams.set("addListitemType", "things");
+  url.searchParams.set("addListitemId", item.objectId);
+  url.searchParams.set("addListitemBody", body);
+
+  const imageId = extractBggImageId(item);
+  if (imageId) {
+    url.searchParams.set("addListitemImageid", imageId);
+  }
+
   return url.toString();
 }
 
@@ -189,6 +211,21 @@ export default function ForTradeScreen() {
                           Collection #{item.collectionId}
                         </Text>
                       ) : null}
+                      {item.version ? (
+                        <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
+                          {item.version}
+                        </Text>
+                      ) : null}
+                      {item.language ? (
+                        <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
+                          {item.language}
+                        </Text>
+                      ) : null}
+                      {item.tradeCondition ? (
+                        <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
+                          Condition: {item.tradeCondition}
+                        </Text>
+                      ) : null}
                     </View>
                     <View style={styles.actionRow}>
                       {postUrl ? (
@@ -201,7 +238,7 @@ export default function ForTradeScreen() {
                         >
                           <Feather name="send" size={13} color={colors.primaryForeground} />
                           <Text style={[styles.postBtnText, { color: colors.primaryForeground }]}>
-                            Post to VFM
+                            Add to VFM
                           </Text>
                         </TouchableOpacity>
                       ) : null}

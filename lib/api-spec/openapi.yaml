@@ -198,6 +198,12 @@ components:
           type: string
         yearPublished:
           type: integer
+        version:
+          type: string
+        language:
+          type: string
+        tradeCondition:
+          type: string
         thumbnail:
           type: string
         image:

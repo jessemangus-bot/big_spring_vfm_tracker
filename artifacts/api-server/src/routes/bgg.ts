@@ -94,6 +94,7 @@ async function fetchForTradeCollection(username: string, apiToken: string): Prom
     username,
     stats: "1",
     trade: "1",
+    version: "1",
   });
 
   return fetchBggXmlText(
@@ -149,7 +150,7 @@ function parseCollectionMatchMap(collectionXml: string): Map<string, WishlistMat
 }
 
 function getCollectionItemName(item: any): string {
-  const name = item.name;
+  const name = asArray(item.name)[0];
   if (typeof name === "string") return name;
   if (name && typeof name === "object") {
     return asText(name["#text"] ?? name._ ?? name["@_value"]);
@@ -167,8 +168,43 @@ function getCollectionItemYear(item: any): number | undefined {
   return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
+function asArray<T>(value: T | T[] | undefined): T[] {
+  if (value == null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function getVersionItem(item: any): any | undefined {
+  return asArray(item.version?.item)[0];
+}
+
+function getCollectionVersionName(item: any): string | undefined {
+  const versionItem = getVersionItem(item);
+  if (!versionItem) return undefined;
+
+  const primaryName = asArray(versionItem.name).find(
+    (name: any) => name?.["@_type"] === "primary",
+  );
+  const fallbackName = asArray(versionItem.name)[0];
+  const name = primaryName ?? fallbackName;
+  const value = asText(name?.["@_value"] ?? name?.["#text"] ?? name);
+
+  return value || undefined;
+}
+
+function getCollectionVersionLanguage(item: any): string | undefined {
+  const versionItem = getVersionItem(item);
+  if (!versionItem) return undefined;
+
+  const languages = asArray(versionItem.link)
+    .filter((link: any) => link?.["@_type"] === "language")
+    .map((link: any) => asText(link?.["@_value"]))
+    .filter(Boolean);
+
+  return languages.length > 0 ? languages.join(", ") : undefined;
+}
+
 function parseForTradeCollectionItems(collectionXml: string) {
-  const parser = createBggXmlParser(["item"]);
+  const parser = createBggXmlParser(["item", "link", "name"]);
   const parsed = parser.parse(collectionXml);
   const rawItems: any[] = parsed.items?.item ?? [];
 
@@ -183,6 +219,9 @@ function parseForTradeCollectionItems(collectionXml: string) {
         objectId,
         gameTitle: getCollectionItemName(item),
         yearPublished: getCollectionItemYear(item),
+        version: getCollectionVersionName(item),
+        language: getCollectionVersionLanguage(item),
+        tradeCondition: asText(item.conditiontext) || undefined,
         thumbnail: asText(item.thumbnail) || undefined,
         image: asText(item.image) || undefined,
         bggUrl: objectId ? `https://boardgamegeek.com/boardgame/${objectId}` : undefined,
