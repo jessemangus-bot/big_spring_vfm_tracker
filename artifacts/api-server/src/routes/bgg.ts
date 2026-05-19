@@ -89,6 +89,21 @@ async function fetchCollection(username: string, apiToken: string): Promise<stri
   );
 }
 
+async function fetchForTradeCollection(username: string, apiToken: string): Promise<string> {
+  const params = new URLSearchParams({
+    username,
+    stats: "1",
+    trade: "1",
+  });
+
+  return fetchBggXmlText(
+    `${BGG_COLLECTION_API_BASE}?${params.toString()}`,
+    apiToken,
+    "BGG collection",
+    "BGG collection API",
+  );
+}
+
 function attrIsTrue(value: unknown): boolean {
   return value === "1" || value === 1 || value === true;
 }
@@ -131,6 +146,54 @@ function parseCollectionMatchMap(collectionXml: string): Map<string, WishlistMat
   }
 
   return matchMap;
+}
+
+function getCollectionItemName(item: any): string {
+  const name = item.name;
+  if (typeof name === "string") return name;
+  if (name && typeof name === "object") {
+    return asText(name["#text"] ?? name._ ?? name["@_value"]);
+  }
+  return "Unknown Game";
+}
+
+function getCollectionItemYear(item: any): number | undefined {
+  const raw = item.yearpublished;
+  const value =
+    typeof raw === "object" && raw !== null
+      ? Number(raw["#text"] ?? raw._ ?? raw["@_value"])
+      : Number(raw);
+
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function parseForTradeCollectionItems(collectionXml: string) {
+  const parser = createBggXmlParser(["item"]);
+  const parsed = parser.parse(collectionXml);
+  const rawItems: any[] = parsed.items?.item ?? [];
+
+  return rawItems
+    .filter((item) => attrIsTrue(item.status?.["@_fortrade"]))
+    .map((item) => {
+      const objectId = String(item["@_objectid"] ?? "");
+
+      return {
+        id: objectId || String(item["@_collid"] ?? Math.random()),
+        collectionId: String(item["@_collid"] ?? ""),
+        objectId,
+        gameTitle: getCollectionItemName(item),
+        yearPublished: getCollectionItemYear(item),
+        thumbnail: asText(item.thumbnail) || undefined,
+        image: asText(item.image) || undefined,
+        bggUrl: objectId ? `https://boardgamegeek.com/boardgame/${objectId}` : undefined,
+      };
+    })
+    .sort((a, b) =>
+      a.gameTitle.localeCompare(b.gameTitle, undefined, {
+        sensitivity: "base",
+        numeric: true,
+      }),
+    );
 }
 
 function sleep(ms: number) {
@@ -826,6 +889,52 @@ router.get("/bgg/wishlist", async (req, res) => {
 
     req.log.error({ err }, "BGG wishlist match fetch failed");
     res.status(502).json({ error: err.message ?? "Failed to fetch wishlist matches" });
+  }
+});
+
+router.get("/bgg/for-trade", async (req, res) => {
+  const { username } = req.query as Record<string, string>;
+
+  if (!username) {
+    res.status(400).json({ error: "username is required" });
+    return;
+  }
+
+  const apiToken = process.env[BGG_API_TOKEN_ENV_VAR]?.trim();
+  if (!apiToken) {
+    req.log.error(
+      { envVar: BGG_API_TOKEN_ENV_VAR },
+      "Missing required BGG API token configuration",
+    );
+    res.status(500).json({
+      error: `Server is missing ${BGG_API_TOKEN_ENV_VAR} configuration`,
+    });
+    return;
+  }
+
+  try {
+    const collectionXml = await fetchForTradeCollection(username, apiToken);
+    const items = parseForTradeCollectionItems(collectionXml);
+
+    res.json({
+      username,
+      totalForTrade: items.length,
+      items,
+    });
+  } catch (err: any) {
+    if (err instanceof BggProcessingError) {
+      res
+        .status(202)
+        .set("Retry-After", String(err.retryAfterSeconds))
+        .json({
+          error: err.message,
+          retryAfterSeconds: err.retryAfterSeconds,
+        });
+      return;
+    }
+
+    req.log.error({ err }, "BGG for-trade collection fetch failed");
+    res.status(502).json({ error: err.message ?? "Failed to fetch for-trade collection" });
   }
 });
 

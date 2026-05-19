@@ -26,6 +26,7 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="wishlist" options={{ title: "Wishlist" }} />
+      <Stack.Screen name="for-trade" options={{ title: "For Trade" }} />
     </Stack>
   );
 }

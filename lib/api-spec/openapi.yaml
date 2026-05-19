@@ -76,6 +76,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /bgg/for-trade:
+    get:
+      operationId: getBggForTradeCollection
+      tags: [bgg]
+      summary: Fetch BGG collection items marked for trade
+      description: Fetches a BGG user's collection and returns games marked for trade.
+      parameters:
+        - name: username
+          in: query
+          required: true
+          schema:
+            type: string
+          description: BGG username whose collection should be checked
+      responses:
+        "200":
+          description: For-trade collection items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BggForTradeCollection"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server configuration error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: BGG API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -132,6 +170,45 @@ components:
         - price
         - type
         - status
+    BggForTradeCollection:
+      type: object
+      properties:
+        username:
+          type: string
+        totalForTrade:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BggForTradeItem"
+      required:
+        - username
+        - totalForTrade
+        - items
+    BggForTradeItem:
+      type: object
+      properties:
+        id:
+          type: string
+        collectionId:
+          type: string
+        objectId:
+          type: string
+        gameTitle:
+          type: string
+        yearPublished:
+          type: integer
+        thumbnail:
+          type: string
+        image:
+          type: string
+        bggUrl:
+          type: string
+      required:
+        - id
+        - collectionId
+        - objectId
+        - gameTitle
     ErrorResponse:
       type: object
       properties:

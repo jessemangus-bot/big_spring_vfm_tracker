@@ -186,6 +186,13 @@ export default function HomeScreen() {
             <Feather name="heart" size={18} color={colors.foreground} />
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
+            onPress={() => router.push("/for-trade" as any)}
+            activeOpacity={0.8}
+          >
+            <Feather name="repeat" size={18} color={colors.foreground} />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.iconBtn, { backgroundColor: colors.secondary, opacity: isSyncing ? 0.5 : 1 }]}
             onPress={handleRefresh}
             disabled={isSyncing}
