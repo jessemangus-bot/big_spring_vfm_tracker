@@ -35,6 +35,7 @@ interface ExchangeItem {
 }
 
 const SETTLED_USERS_KEY = "bgg_vfm_settled_users_v1";
+const ADVANCE_PAID_USERS_KEY = "bgg_vfm_advance_paid_users_v1";
 
 function getUser(game: Game) {
   const user = game.buyerSeller?.trim();
@@ -51,30 +52,38 @@ function openBggUrl(url: string) {
   });
 }
 
+function parseUserFlagMap(raw: string | null): Record<string, boolean> {
+  if (!raw) return {};
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>).filter(([, value]) => value === true)
+    ) as Record<string, boolean>;
+  } catch {
+    return {};
+  }
+}
+
 export default function BalancesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { games } = useVFM();
   const [settledUsers, setSettledUsers] = useState<Record<string, boolean>>({});
+  const [advancePaidUsers, setAdvancePaidUsers] = useState<Record<string, boolean>>({});
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : 0;
 
   useEffect(() => {
-    AsyncStorage.getItem(SETTLED_USERS_KEY).then((raw) => {
-      if (!raw) return;
-
-      try {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object") {
-          const settled = Object.fromEntries(
-            Object.entries(parsed as Record<string, unknown>).filter(
-              ([, value]) => value === true
-            )
-          ) as Record<string, boolean>;
-          setSettledUsers(settled);
-        }
-      } catch {}
+    Promise.all([
+      AsyncStorage.getItem(SETTLED_USERS_KEY),
+      AsyncStorage.getItem(ADVANCE_PAID_USERS_KEY),
+    ]).then(([rawSettled, rawAdvancePaid]) => {
+      setSettledUsers(parseUserFlagMap(rawSettled));
+      setAdvancePaidUsers(parseUserFlagMap(rawAdvancePaid));
     });
   }, []);
 
@@ -87,6 +96,19 @@ export default function BalancesScreen() {
       }
 
       AsyncStorage.setItem(SETTLED_USERS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const toggleAdvancePaid = useCallback((username: string) => {
+    setAdvancePaidUsers((current) => {
+      const next = { ...current, [username]: !current[username] };
+
+      if (!next[username]) {
+        delete next[username];
+      }
+
+      AsyncStorage.setItem(ADVANCE_PAID_USERS_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
@@ -177,6 +199,7 @@ export default function BalancesScreen() {
     const isPositive = item.delta > 0;
     const isNegative = item.delta < 0;
     const isSettled = !!settledUsers[item.username];
+    const isAdvancePaid = !!advancePaidUsers[item.username];
     const deltaColor = isPositive
       ? colors.success
       : isNegative
@@ -187,7 +210,6 @@ export default function BalancesScreen() {
       : isNegative
       ? "You owe them"
       : "Settled";
-    const statusColor = isSettled ? colors.success : deltaColor;
 
     return (
       <View style={[styles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -197,24 +219,6 @@ export default function BalancesScreen() {
 
         <View style={styles.rowMain}>
           <View style={styles.rowHeader}>
-            <TouchableOpacity
-              style={[
-                styles.checkbox,
-                {
-                  backgroundColor: isSettled ? colors.success : colors.card,
-                  borderColor: isSettled ? colors.success : colors.border,
-                },
-              ]}
-              onPress={() => toggleSettled(item.username)}
-              activeOpacity={0.75}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: isSettled }}
-              accessibilityLabel={`Mark exchange with ${item.username} as made`}
-            >
-              {isSettled ? (
-                <Feather name="check" size={15} color={colors.primaryForeground} />
-              ) : null}
-            </TouchableOpacity>
             <Text style={[styles.username, { color: colors.foreground }]} numberOfLines={1}>
               {item.username}
             </Text>
@@ -223,9 +227,73 @@ export default function BalancesScreen() {
             </Text>
           </View>
 
-          <Text style={[styles.deltaLabel, { color: statusColor }]}>
-            {isSettled ? "Exchange made" : deltaLabel}
+          <Text style={[styles.deltaLabel, { color: deltaColor }]}>
+            {deltaLabel}
           </Text>
+
+          <View style={styles.statusControls}>
+            <TouchableOpacity
+              style={styles.statusToggle}
+              onPress={() => toggleSettled(item.username)}
+              activeOpacity={0.75}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isSettled }}
+              accessibilityLabel={`Mark exchange with ${item.username} as made`}
+            >
+              <View
+                style={[
+                  styles.checkbox,
+                  {
+                    backgroundColor: isSettled ? colors.success : colors.card,
+                    borderColor: isSettled ? colors.success : colors.border,
+                  },
+                ]}
+              >
+                {isSettled ? (
+                  <Feather name="check" size={14} color={colors.primaryForeground} />
+                ) : null}
+              </View>
+              <Text
+                style={[
+                  styles.statusToggleText,
+                  { color: isSettled ? colors.success : colors.mutedForeground },
+                ]}
+              >
+                Exchange made
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.statusToggle}
+              onPress={() => toggleAdvancePaid(item.username)}
+              activeOpacity={0.75}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isAdvancePaid }}
+              accessibilityLabel={`Mark payment with ${item.username} as paid in advance`}
+            >
+              <View
+                style={[
+                  styles.checkbox,
+                  {
+                    backgroundColor: isAdvancePaid ? colors.success : colors.card,
+                    borderColor: isAdvancePaid ? colors.success : colors.border,
+                  },
+                ]}
+              >
+                {isAdvancePaid ? (
+                  <Feather name="check" size={14} color={colors.primaryForeground} />
+                ) : null}
+              </View>
+              <Text
+                style={[
+                  styles.statusToggleText,
+                  { color: isAdvancePaid ? colors.success : colors.mutedForeground },
+                ]}
+              >
+                Paid in advance
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.amountGrid}>
             <View style={[styles.amountPill, { backgroundColor: colors.success + "16" }]}>
@@ -467,8 +535,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   checkbox: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     borderRadius: 6,
     borderWidth: 2,
     alignItems: "center",
@@ -485,6 +553,21 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
   },
   deltaLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+  statusControls: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  statusToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 28,
+  },
+  statusToggleText: {
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
   },
