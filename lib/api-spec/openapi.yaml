@@ -114,6 +114,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /bgg/geeklist/all-items:
+    get:
+      operationId: getBggGeeklistAllItems
+      tags: [bgg]
+      summary: Fetch all BGG geeklist items
+      description: Fetches every item in a BGG geeklist, sorted alphabetically, and marks whether each item is related to the configured user.
+      parameters:
+        - name: listId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The BGG geeklist ID (extracted from the URL)
+        - name: username
+          in: query
+          required: true
+          schema:
+            type: string
+          description: BGG username used to identify related items
+        - name: realName
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional real name fallback used for matching "sold to" mentions
+      responses:
+        "200":
+          description: All geeklist items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BggGeeklistAllItems"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server configuration error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: BGG API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -215,6 +265,78 @@ components:
         - collectionId
         - objectId
         - gameTitle
+    BggGeeklistAllItems:
+      type: object
+      properties:
+        listTitle:
+          type: string
+        totalItems:
+          type: integer
+        relationshipCounts:
+          $ref: "#/components/schemas/BggVfmRelationshipCounts"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BggVfmItem"
+      required:
+        - listTitle
+        - totalItems
+        - relationshipCounts
+        - items
+    BggVfmRelationshipCounts:
+      type: object
+      properties:
+        mine:
+          type: integer
+        purchased:
+          type: integer
+        offer:
+          type: integer
+        auction:
+          type: integer
+        unrelated:
+          type: integer
+      required:
+        - mine
+        - purchased
+        - offer
+        - auction
+        - unrelated
+    BggVfmItem:
+      type: object
+      properties:
+        id:
+          type: string
+        objectId:
+          type: string
+        gameTitle:
+          type: string
+        price:
+          type: number
+        seller:
+          type: string
+        status:
+          type: string
+          enum: [listed, sold, withdrawn, expired]
+        type:
+          type: string
+          enum: [sale, purchase]
+        condition:
+          type: string
+        relationship:
+          type: string
+          enum: [mine, purchased, offer, auction, unrelated]
+        bggUrl:
+          type: string
+      required:
+        - id
+        - gameTitle
+        - price
+        - seller
+        - status
+        - type
+        - relationship
+        - bggUrl
     ErrorResponse:
       type: object
       properties:

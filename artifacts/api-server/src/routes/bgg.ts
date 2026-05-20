@@ -19,7 +19,9 @@ class BggProcessingError extends Error {
   retryAfterSeconds = RETRY_DELAY_SECONDS;
 
   constructor(resource: string) {
-    super(`${resource} is still being prepared by BGG. Please try again shortly.`);
+    super(
+      `${resource} is still being prepared by BGG. Please try again shortly.`,
+    );
     this.name = "BggProcessingError";
   }
 }
@@ -75,7 +77,10 @@ async function fetchGeelist(
   );
 }
 
-async function fetchCollection(username: string, apiToken: string): Promise<string> {
+async function fetchCollection(
+  username: string,
+  apiToken: string,
+): Promise<string> {
   const params = new URLSearchParams({
     username,
     stats: "1",
@@ -89,7 +94,10 @@ async function fetchCollection(username: string, apiToken: string): Promise<stri
   );
 }
 
-async function fetchForTradeCollection(username: string, apiToken: string): Promise<string> {
+async function fetchForTradeCollection(
+  username: string,
+  apiToken: string,
+): Promise<string> {
   const params = new URLSearchParams({
     username,
     stats: "1",
@@ -124,7 +132,9 @@ function createBggXmlParser(arrayNodeNames: readonly string[]) {
   });
 }
 
-function parseCollectionMatchMap(collectionXml: string): Map<string, WishlistMatchType[]> {
+function parseCollectionMatchMap(
+  collectionXml: string,
+): Map<string, WishlistMatchType[]> {
   const parser = createBggXmlParser(["item"]);
   const parsed = parser.parse(collectionXml);
   const rawItems: any[] = parsed.items?.item ?? [];
@@ -224,7 +234,9 @@ function parseForTradeCollectionItems(collectionXml: string) {
         tradeCondition: asText(item.conditiontext) || undefined,
         thumbnail: asText(item.thumbnail) || undefined,
         image: asText(item.image) || undefined,
-        bggUrl: objectId ? `https://boardgamegeek.com/boardgame/${objectId}` : undefined,
+        bggUrl: objectId
+          ? `https://boardgamegeek.com/boardgame/${objectId}`
+          : undefined,
       };
     })
     .sort((a, b) =>
@@ -390,7 +402,10 @@ function parseBuyer(body: string): string | undefined {
   return undefined;
 }
 
-function soldContextMentionsUsername(body: string, usernameLower: string): boolean {
+function soldContextMentionsUsername(
+  body: string,
+  usernameLower: string,
+): boolean {
   const soldContext = extractSoldContext(body);
   if (!soldContext) return false;
 
@@ -428,19 +443,19 @@ const APO = "['\u2018\u2019]";
 // Phrases in a comment that signal purchase intent
 const PURCHASE_INTENT_RE = new RegExp(
   `\\bi${APO}?ll\\s+take\\s+(this|it|them|all|the\\s+lot)\\b|\\bmine\\b|\\bdibs\\b|\\bi\\s+will\\s+take\\s+(this|it|them)\\b|\\bi\\s+offer\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bmy\\s+offer\\s+is\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\boffering\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bi${APO}?m\\s+offering\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bi\\s+am\\s+offering\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bwould\\s+you\\s+take\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bcan\\s+you\\s+do\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b|\\bhow\\s+about\\s+\\$?\\s*\\d+(?:\\.\\d+)?\\b`,
-  "i"
+  "i",
 );
 
 // Phrases that explicitly cancel / withdraw interest
 const CANCELLED_RE = new RegExp(
   `\\bi${APO}?(?:ll|\\s*will|\\s*am\\s+(?:going\\s+to|gonna))\\s+pass\\b|\\bi\\s+have\\s+to\\s+pass\\b|\\bgoing\\s+to\\s+pass\\b|\\bno\\s+longer\\s+interested\\b|\\bnevermind\\b|\\bnever\\s+mind\\b|\\bno\\s+thanks\\b`,
-  "i"
+  "i",
 );
 
 // Seller confirmation phrases in comments
 const SELLER_CONFIRMED_RE = new RegExp(
   `\\bsold\\b|\\bsounds\\s+good\\b|\\bit${APO}?s?\\s+yours\\b|\\byou${APO}?re\\s+next\\b|\\byou\\s+got\\s+it\\b|\\boffer\\s+accepted\\b|\\baccepted\\b|\\bi\\s+accept\\b|\\bdeal\\b|\\bworks\\s+for\\s+me\\b`,
-  "i"
+  "i",
 );
 
 interface ParsedComment {
@@ -467,7 +482,7 @@ interface PurchaseIntentState {
 
 function getPurchaseIntentState(
   comments: ParsedComment[],
-  usernameLower: string
+  usernameLower: string,
 ): PurchaseIntentState {
   let hasActiveIntent = false;
   let latestIntentComment: ParsedComment | undefined;
@@ -494,7 +509,12 @@ function getPurchaseIntentState(
     }
   }
 
-  return { hasActiveIntent, latestIntentComment, hasCancellationSignal, latestSignal };
+  return {
+    hasActiveIntent,
+    latestIntentComment,
+    hasCancellationSignal,
+    latestSignal,
+  };
 }
 
 interface ParsedItem {
@@ -514,6 +534,26 @@ interface ParsedGeeklistData {
   listTitle: string;
   totalItems: number;
   items: ParsedItem[];
+}
+
+type VfmItemRelationship =
+  | "mine"
+  | "purchased"
+  | "offer"
+  | "auction"
+  | "unrelated";
+
+interface ParsedVfmItem {
+  id: string;
+  objectId?: string;
+  gameTitle: string;
+  price: number;
+  seller: string;
+  status: "listed" | "sold" | "withdrawn" | "expired";
+  type: "sale" | "purchase";
+  condition?: string;
+  relationship: VfmItemRelationship;
+  bggUrl: string;
 }
 
 type CommentEnrichmentStatus = "warming" | "refreshing" | "ready" | "error";
@@ -577,38 +617,50 @@ function parseGeeklistXml(
     // ── Case 2: Auction items — check if user has placed a bid ───────────────
     if (isAuctionItem(body)) {
       const userBidComments = comments.filter(
-        (c) => c.username === usernameLower && parseBidAmount(c.text) > 0
+        (c) => c.username === usernameLower && parseBidAmount(c.text) > 0,
       );
 
       if (userBidComments.length > 0) {
-        const myHighestBid = Math.max(...userBidComments.map((c) => parseBidAmount(c.text)));
+        const myHighestBid = Math.max(
+          ...userBidComments.map((c) => parseBidAmount(c.text)),
+        );
         const binPrice = parseBinPrice(body);
         const otherBids = comments
-          .filter((c) => c.username !== usernameLower && c.username !== itemUsername)
+          .filter(
+            (c) => c.username !== usernameLower && c.username !== itemUsername,
+          )
           .map((c) => parseBidAmount(c.text))
           .filter((v) => v > 0);
-        const highestOtherBid = otherBids.length > 0 ? Math.max(...otherBids) : 0;
+        const highestOtherBid =
+          otherBids.length > 0 ? Math.max(...otherBids) : 0;
         const finalBuyer = parseBuyer(body)?.toLowerCase();
         const finalPrice = parsePrice(item, body);
         const status = parseStatus(item, body);
 
-        const auctionStatus: "winning" | "outbid" =
-          finalBuyer
-            ? finalBuyer === usernameLower
-              ? "winning"
-              : "outbid"
-            : (myHighestBid >= highestOtherBid ? "winning" : "outbid");
+        const auctionStatus: "winning" | "outbid" = finalBuyer
+          ? finalBuyer === usernameLower
+            ? "winning"
+            : "outbid"
+          : myHighestBid >= highestOtherBid
+            ? "winning"
+            : "outbid";
 
         const isSold = status === "sold";
         const hasReachedBin = binPrice > 0 && myHighestBid >= binPrice;
         const shouldConvertToPurchase =
-          auctionStatus === "winning" && (hasReachedBin || finalBuyer === usernameLower);
+          auctionStatus === "winning" &&
+          (hasReachedBin || finalBuyer === usernameLower);
 
         if (shouldConvertToPurchase) {
           items.push({
             id: String(item["@_id"] ?? Math.random()),
             gameTitle: objectname,
-            price: finalPrice > 0 ? finalPrice : (binPrice > 0 ? binPrice : myHighestBid),
+            price:
+              finalPrice > 0
+                ? finalPrice
+                : binPrice > 0
+                  ? binPrice
+                  : myHighestBid,
             type: "purchase",
             status: "sold",
             buyerSeller: item["@_username"],
@@ -673,17 +725,18 @@ function parseGeeklistXml(
     if (!purchaseIntentState.hasActiveIntent) continue;
 
     // Check for confirmation: sold attribute OR seller said "Sold" / "Sounds good"
-    const isSoldByAttr =
-      item["@_sold"] === "1" || item["@_sold"] === 1;
+    const isSoldByAttr = item["@_sold"] === "1" || item["@_sold"] === 1;
     const isSoldByBody = parseStatus(item, body) === "sold";
     const sellerComments = comments.filter((c) => c.username === itemUsername);
     const sellerConfirmed = sellerComments.some((c) =>
-      SELLER_CONFIRMED_RE.test(c.text)
+      SELLER_CONFIRMED_RE.test(c.text),
     );
 
     // Try to get price from the user's purchase-intent comment first
     const intentComment = purchaseIntentState.latestIntentComment;
-    const commentPrice = intentComment ? parsePriceFromComment(intentComment.text) : 0;
+    const commentPrice = intentComment
+      ? parsePriceFromComment(intentComment.text)
+      : 0;
     const finalPrice = commentPrice > 0 ? commentPrice : parsePrice(item, body);
     const isConfirmed = isSoldByAttr || isSoldByBody || sellerConfirmed;
 
@@ -705,11 +758,78 @@ function parseGeeklistXml(
   };
 }
 
-function mergeParsedItems(fastItems: ParsedItem[], enrichedItems: ParsedItem[]): ParsedItem[] {
+function mergeParsedItems(
+  fastItems: ParsedItem[],
+  enrichedItems: ParsedItem[],
+): ParsedItem[] {
   const byId = new Map<string, ParsedItem>();
   for (const item of fastItems) byId.set(item.id, item);
   for (const item of enrichedItems) byId.set(item.id, item);
   return Array.from(byId.values());
+}
+
+function relationshipForParsedItem(item: ParsedItem): VfmItemRelationship {
+  if (item.type === "purchase") return "purchased";
+  if (item.type === "offer") return "offer";
+  if (item.type === "auction") return "auction";
+  return "mine";
+}
+
+function parseAllGeeklistItems(
+  xml: string,
+  listId: string,
+  relatedItems: ParsedItem[],
+): { listTitle: string; totalItems: number; items: ParsedVfmItem[] } {
+  const parser = createBggXmlParser(["item"]);
+  const parsed = parser.parse(xml);
+
+  const geeklist = parsed.geeklist;
+  if (!geeklist) {
+    throw new Error("Unexpected BGG API response format");
+  }
+
+  const relatedById = new Map(
+    relatedItems.map((item) => [item.id, relationshipForParsedItem(item)]),
+  );
+  const listTitle: string = geeklist.title ?? "BGG Geeklist";
+  const rawItems: any[] = geeklist.item ?? [];
+
+  const items = rawItems
+    .map((item): ParsedVfmItem => {
+      const id = String(item["@_id"] ?? Math.random());
+      const body = asText(item.body);
+
+      return {
+        id,
+        objectId: asText(item["@_objectid"]) || undefined,
+        gameTitle: asText(item["@_objectname"] ?? "Unknown Game"),
+        price: parsePrice(item, body),
+        seller: asText(item["@_username"]),
+        status: parseStatus(item, body),
+        type: parseType(body),
+        condition: parseCondition(body),
+        relationship: relatedById.get(id) ?? "unrelated",
+        bggUrl: `https://boardgamegeek.com/geeklist/${listId}/item/${id}`,
+      };
+    })
+    .sort((a, b) => {
+      const titleCmp = a.gameTitle.localeCompare(b.gameTitle, undefined, {
+        sensitivity: "base",
+        numeric: true,
+      });
+      if (titleCmp !== 0) return titleCmp;
+
+      return a.seller.localeCompare(b.seller, undefined, {
+        sensitivity: "base",
+        numeric: true,
+      });
+    });
+
+  return {
+    listTitle,
+    totalItems: rawItems.length,
+    items,
+  };
 }
 
 function ensureCommentGeeklistWarming(
@@ -721,23 +841,28 @@ function ensureCommentGeeklistWarming(
   const cacheKey = listId;
   const existing = commentGeeklistCache.get(cacheKey);
   const hasFreshXml =
-    existing?.xml && existing.updatedAt && now - existing.updatedAt < COMMENT_CACHE_TTL_MS;
+    existing?.xml &&
+    existing.updatedAt &&
+    now - existing.updatedAt < COMMENT_CACHE_TTL_MS;
 
   if (existing?.promise || hasFreshXml) {
     return existing;
   }
 
-  const entry: CommentCacheEntry =
-    existing ?? {
-      status: "warming",
-    };
+  const entry: CommentCacheEntry = existing ?? {
+    status: "warming",
+  };
   entry.status = entry.xml ? "refreshing" : "warming";
   entry.startedAt = now;
   entry.error = undefined;
 
   entry.promise = (async () => {
     try {
-      for (let attempt = 0; attempt < COMMENT_BACKGROUND_MAX_ATTEMPTS; attempt++) {
+      for (
+        let attempt = 0;
+        attempt < COMMENT_BACKGROUND_MAX_ATTEMPTS;
+        attempt++
+      ) {
         try {
           const xml = await fetchGeelist(listId, apiToken, true);
           entry.xml = xml;
@@ -754,7 +879,8 @@ function ensureCommentGeeklistWarming(
         }
       }
       entry.status = entry.xml ? "ready" : "error";
-      entry.error = "BGG comments were still processing after background retries.";
+      entry.error =
+        "BGG comments were still processing after background retries.";
     } catch (err: any) {
       entry.status = entry.xml ? "ready" : "error";
       entry.error = err?.message ?? "Failed to refresh BGG comments.";
@@ -791,7 +917,11 @@ router.get("/bgg/geeklist", async (req, res) => {
   try {
     const xml = await fetchGeelist(listId, apiToken);
     const fastData = parseGeeklistXml(xml, username, realName);
-    const commentEntry = ensureCommentGeeklistWarming(listId, apiToken, req.log);
+    const commentEntry = ensureCommentGeeklistWarming(
+      listId,
+      apiToken,
+      req.log,
+    );
 
     let items = fastData.items;
     let commentEnrichmentStatus = commentEntry.status;
@@ -802,11 +932,18 @@ router.get("/bgg/geeklist", async (req, res) => {
 
     if (commentEntry.xml) {
       try {
-        const enrichedData = parseGeeklistXml(commentEntry.xml, username, realName);
+        const enrichedData = parseGeeklistXml(
+          commentEntry.xml,
+          username,
+          realName,
+        );
         commentItems = enrichedData.items.length;
         items = mergeParsedItems(fastData.items, enrichedData.items);
       } catch (err: any) {
-        req.log.warn({ err }, "Cached BGG comment enrichment could not be parsed");
+        req.log.warn(
+          { err },
+          "Cached BGG comment enrichment could not be parsed",
+        );
         commentEnrichmentStatus = "error";
       }
     }
@@ -824,18 +961,110 @@ router.get("/bgg/geeklist", async (req, res) => {
     });
   } catch (err: any) {
     if (err instanceof BggProcessingError) {
-      res
-        .status(202)
-        .set("Retry-After", String(err.retryAfterSeconds))
-        .json({
-          error: err.message,
-          retryAfterSeconds: err.retryAfterSeconds,
-        });
+      res.status(202).set("Retry-After", String(err.retryAfterSeconds)).json({
+        error: err.message,
+        retryAfterSeconds: err.retryAfterSeconds,
+      });
       return;
     }
 
     req.log.error({ err }, "BGG geeklist fetch failed");
     res.status(502).json({ error: err.message ?? "Failed to fetch geeklist" });
+  }
+});
+
+router.get("/bgg/geeklist/all-items", async (req, res) => {
+  const { listId, username, realName } = req.query as Record<string, string>;
+
+  if (!listId || !username) {
+    res.status(400).json({ error: "listId and username are required" });
+    return;
+  }
+
+  const apiToken = process.env[BGG_API_TOKEN_ENV_VAR]?.trim();
+  if (!apiToken) {
+    req.log.error(
+      { envVar: BGG_API_TOKEN_ENV_VAR },
+      "Missing required BGG API token configuration",
+    );
+    res.status(500).json({
+      error: `Server is missing ${BGG_API_TOKEN_ENV_VAR} configuration`,
+    });
+    return;
+  }
+
+  try {
+    const xml = await fetchGeelist(listId, apiToken);
+    const fastData = parseGeeklistXml(xml, username, realName);
+    const commentEntry = ensureCommentGeeklistWarming(
+      listId,
+      apiToken,
+      req.log,
+    );
+
+    let relatedItems = fastData.items;
+    let commentEnrichmentStatus = commentEntry.status;
+    let commentEnrichedAt = commentEntry.updatedAt
+      ? new Date(commentEntry.updatedAt).toISOString()
+      : null;
+    let commentItems = 0;
+
+    if (commentEntry.xml) {
+      try {
+        const enrichedData = parseGeeklistXml(
+          commentEntry.xml,
+          username,
+          realName,
+        );
+        commentItems = enrichedData.items.length;
+        relatedItems = mergeParsedItems(fastData.items, enrichedData.items);
+      } catch (err: any) {
+        req.log.warn(
+          { err },
+          "Cached BGG comment enrichment could not be parsed",
+        );
+        commentEnrichmentStatus = "error";
+      }
+    }
+
+    const data = parseAllGeeklistItems(xml, listId, relatedItems);
+    const relationshipCounts = data.items.reduce(
+      (counts, item) => {
+        counts[item.relationship] += 1;
+        return counts;
+      },
+      {
+        mine: 0,
+        purchased: 0,
+        offer: 0,
+        auction: 0,
+        unrelated: 0,
+      } satisfies Record<VfmItemRelationship, number>,
+    );
+
+    res.json({
+      ...data,
+      relationshipCounts,
+      commentEnrichment: {
+        status: commentEnrichmentStatus,
+        enrichedAt: commentEnrichedAt,
+        itemCount: commentItems,
+        retryAfterSeconds: RETRY_DELAY_SECONDS,
+      },
+    });
+  } catch (err: any) {
+    if (err instanceof BggProcessingError) {
+      res.status(202).set("Retry-After", String(err.retryAfterSeconds)).json({
+        error: err.message,
+        retryAfterSeconds: err.retryAfterSeconds,
+      });
+      return;
+    }
+
+    req.log.error({ err }, "BGG all geeklist items fetch failed");
+    res
+      .status(502)
+      .json({ error: err.message ?? "Failed to fetch geeklist items" });
   }
 });
 
@@ -916,18 +1145,17 @@ router.get("/bgg/wishlist", async (req, res) => {
     });
   } catch (err: any) {
     if (err instanceof BggProcessingError) {
-      res
-        .status(202)
-        .set("Retry-After", String(err.retryAfterSeconds))
-        .json({
-          error: err.message,
-          retryAfterSeconds: err.retryAfterSeconds,
-        });
+      res.status(202).set("Retry-After", String(err.retryAfterSeconds)).json({
+        error: err.message,
+        retryAfterSeconds: err.retryAfterSeconds,
+      });
       return;
     }
 
     req.log.error({ err }, "BGG wishlist match fetch failed");
-    res.status(502).json({ error: err.message ?? "Failed to fetch wishlist matches" });
+    res
+      .status(502)
+      .json({ error: err.message ?? "Failed to fetch wishlist matches" });
   }
 });
 
@@ -962,18 +1190,17 @@ router.get("/bgg/for-trade", async (req, res) => {
     });
   } catch (err: any) {
     if (err instanceof BggProcessingError) {
-      res
-        .status(202)
-        .set("Retry-After", String(err.retryAfterSeconds))
-        .json({
-          error: err.message,
-          retryAfterSeconds: err.retryAfterSeconds,
-        });
+      res.status(202).set("Retry-After", String(err.retryAfterSeconds)).json({
+        error: err.message,
+        retryAfterSeconds: err.retryAfterSeconds,
+      });
       return;
     }
 
     req.log.error({ err }, "BGG for-trade collection fetch failed");
-    res.status(502).json({ error: err.message ?? "Failed to fetch for-trade collection" });
+    res
+      .status(502)
+      .json({ error: err.message ?? "Failed to fetch for-trade collection" });
   }
 });
 

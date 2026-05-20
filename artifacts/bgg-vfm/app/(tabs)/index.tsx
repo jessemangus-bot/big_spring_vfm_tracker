@@ -20,7 +20,14 @@ import { StatCard } from "@/components/StatCard";
 import { Game, useVFM } from "@/context/VFMContext";
 import { useColors } from "@/hooks/useColors";
 
-type FilterType = "all" | "listed" | "sold" | "purchase" | "offer" | "winning" | "outbid";
+type FilterType =
+  | "all"
+  | "listed"
+  | "sold"
+  | "purchase"
+  | "offer"
+  | "winning"
+  | "outbid";
 type SortType = "listing" | "title" | "username";
 
 function extractListingNumber(game: Game): number | null {
@@ -37,7 +44,8 @@ export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { games, stats, lastSyncedAt, syncFromBgg, isSyncing, bggSettings } = useVFM();
+  const { games, stats, lastSyncedAt, syncFromBgg, isSyncing, bggSettings } =
+    useVFM();
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [editGame, setEditGame] = useState<Game | null>(null);
@@ -50,12 +58,16 @@ export default function HomeScreen() {
 
   const filtered = games.filter((g) => {
     let matchFilter = true;
-    if (filter === "listed") matchFilter = g.type === "sale" && g.status === "listed";
-    else if (filter === "sold") matchFilter = g.type === "sale" && g.status === "sold";
+    if (filter === "listed")
+      matchFilter = g.type === "sale" && g.status === "listed";
+    else if (filter === "sold")
+      matchFilter = g.type === "sale" && g.status === "sold";
     else if (filter === "purchase") matchFilter = g.type === "purchase";
     else if (filter === "offer") matchFilter = g.type === "offer";
-    else if (filter === "winning") matchFilter = g.type === "auction" && g.auctionStatus === "winning";
-    else if (filter === "outbid") matchFilter = g.type === "auction" && g.auctionStatus === "outbid";
+    else if (filter === "winning")
+      matchFilter = g.type === "auction" && g.auctionStatus === "winning";
+    else if (filter === "outbid")
+      matchFilter = g.type === "auction" && g.auctionStatus === "outbid";
     const matchSearch =
       search.length === 0 ||
       g.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -187,13 +199,26 @@ export default function HomeScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
+            onPress={() => router.push("/browse-vfm" as any)}
+            activeOpacity={0.8}
+          >
+            <Feather name="list" size={18} color={colors.foreground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
             onPress={() => router.push("/for-trade" as any)}
             activeOpacity={0.8}
           >
             <Feather name="repeat" size={18} color={colors.foreground} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.iconBtn, { backgroundColor: colors.secondary, opacity: isSyncing ? 0.5 : 1 }]}
+            style={[
+              styles.iconBtn,
+              {
+                backgroundColor: colors.secondary,
+                opacity: isSyncing ? 0.5 : 1,
+              },
+            ]}
             onPress={handleRefresh}
             disabled={isSyncing}
             activeOpacity={0.8}
@@ -281,20 +306,41 @@ export default function HomeScreen() {
             </View>
 
             {games.length === 0 ? (
-              <View style={[styles.emptySync, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View
+                style={[
+                  styles.emptySync,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
                 <Feather name="refresh-cw" size={20} color={colors.accent} />
-                <Text style={[styles.emptySyncTitle, { color: colors.foreground }]}>
+                <Text
+                  style={[styles.emptySyncTitle, { color: colors.foreground }]}
+                >
                   Sync from BGG
                 </Text>
-                <Text style={[styles.emptySyncText, { color: colors.mutedForeground }]}>
-                  Tap the settings icon to connect your BGG account and import your VFM listings automatically.
+                <Text
+                  style={[
+                    styles.emptySyncText,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  Tap the settings icon to connect your BGG account and import
+                  your VFM listings automatically.
                 </Text>
                 <TouchableOpacity
-                  style={[styles.emptySyncBtn, { backgroundColor: colors.primary }]}
+                  style={[
+                    styles.emptySyncBtn,
+                    { backgroundColor: colors.primary },
+                  ]}
                   onPress={() => setSettingsVisible(true)}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.emptySyncBtnText, { color: colors.primaryForeground }]}>
+                  <Text
+                    style={[
+                      styles.emptySyncBtnText,
+                      { color: colors.primaryForeground },
+                    ]}
+                  >
                     Open Settings
                   </Text>
                 </TouchableOpacity>
@@ -304,10 +350,17 @@ export default function HomeScreen() {
                 <View
                   style={[
                     styles.searchBar,
-                    { backgroundColor: colors.card, borderColor: colors.border },
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
                   ]}
                 >
-                  <Feather name="search" size={16} color={colors.mutedForeground} />
+                  <Feather
+                    name="search"
+                    size={16}
+                    color={colors.mutedForeground}
+                  />
                   <TextInput
                     style={[styles.searchInput, { color: colors.foreground }]}
                     placeholder="Search games or users..."
@@ -317,26 +370,50 @@ export default function HomeScreen() {
                   />
                   {search.length > 0 && (
                     <TouchableOpacity onPress={() => setSearch("")} hitSlop={8}>
-                      <Feather name="x-circle" size={16} color={colors.mutedForeground} />
+                      <Feather
+                        name="x-circle"
+                        size={16}
+                        color={colors.mutedForeground}
+                      />
                     </TouchableOpacity>
                   )}
                 </View>
 
                 <View style={styles.filterRow}>
-                  {(["all", "listed", "sold", "purchase", "offer", "winning", "outbid"] as FilterType[]).map((f) => {
+                  {(
+                    [
+                      "all",
+                      "listed",
+                      "sold",
+                      "purchase",
+                      "offer",
+                      "winning",
+                      "outbid",
+                    ] as FilterType[]
+                  ).map((f) => {
                     const label =
-                      f === "all" ? "All" :
-                      f === "listed" ? "Listed" :
-                      f === "sold" ? "Sold" :
-                      f === "purchase" ? "Purchased" :
-                      f === "offer" ? "Offers" :
-                      f === "winning" ? "Winning" : "Outbid";
+                      f === "all"
+                        ? "All"
+                        : f === "listed"
+                          ? "Listed"
+                          : f === "sold"
+                            ? "Sold"
+                            : f === "purchase"
+                              ? "Purchased"
+                              : f === "offer"
+                                ? "Offers"
+                                : f === "winning"
+                                  ? "Winning"
+                                  : "Outbid";
                     const isAuctionTab = f === "winning" || f === "outbid";
-                    const activeColor = f === "offer"
-                      ? colors.info
-                      : isAuctionTab
-                      ? (f === "winning" ? colors.success : colors.destructive)
-                      : colors.primary;
+                    const activeColor =
+                      f === "offer"
+                        ? colors.info
+                        : isAuctionTab
+                          ? f === "winning"
+                            ? colors.success
+                            : colors.destructive
+                          : colors.primary;
                     const isActive = filter === f;
                     return (
                       <TouchableOpacity
@@ -344,7 +421,9 @@ export default function HomeScreen() {
                         style={[
                           styles.filterChip,
                           {
-                            backgroundColor: isActive ? activeColor : colors.secondary,
+                            backgroundColor: isActive
+                              ? activeColor
+                              : colors.secondary,
                             borderColor: isActive ? activeColor : colors.border,
                           },
                         ]}
@@ -354,7 +433,9 @@ export default function HomeScreen() {
                           style={[
                             styles.filterChipText,
                             {
-                              color: isActive ? colors.primaryForeground : colors.foreground,
+                              color: isActive
+                                ? colors.primaryForeground
+                                : colors.foreground,
                             },
                           ]}
                         >
@@ -366,7 +447,12 @@ export default function HomeScreen() {
                 </View>
 
                 <View style={styles.sortSection}>
-                  <Text style={[styles.sortLabel, { color: colors.mutedForeground }]}>
+                  <Text
+                    style={[
+                      styles.sortLabel,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
                     Sort by
                   </Text>
                   <View style={styles.sortRow}>
@@ -374,8 +460,14 @@ export default function HomeScreen() {
                       style={[
                         styles.sortChip,
                         {
-                          backgroundColor: sortBy === "listing" ? colors.primary : colors.secondary,
-                          borderColor: sortBy === "listing" ? colors.primary : colors.border,
+                          backgroundColor:
+                            sortBy === "listing"
+                              ? colors.primary
+                              : colors.secondary,
+                          borderColor:
+                            sortBy === "listing"
+                              ? colors.primary
+                              : colors.border,
                         },
                       ]}
                       onPress={() => setSortBy("listing")}
@@ -386,7 +478,9 @@ export default function HomeScreen() {
                           styles.sortChipText,
                           {
                             color:
-                              sortBy === "listing" ? colors.primaryForeground : colors.foreground,
+                              sortBy === "listing"
+                                ? colors.primaryForeground
+                                : colors.foreground,
                           },
                         ]}
                       >
@@ -397,8 +491,12 @@ export default function HomeScreen() {
                       style={[
                         styles.sortChip,
                         {
-                          backgroundColor: sortBy === "title" ? colors.primary : colors.secondary,
-                          borderColor: sortBy === "title" ? colors.primary : colors.border,
+                          backgroundColor:
+                            sortBy === "title"
+                              ? colors.primary
+                              : colors.secondary,
+                          borderColor:
+                            sortBy === "title" ? colors.primary : colors.border,
                         },
                       ]}
                       onPress={() => setSortBy("title")}
@@ -408,7 +506,10 @@ export default function HomeScreen() {
                         style={[
                           styles.sortChipText,
                           {
-                            color: sortBy === "title" ? colors.primaryForeground : colors.foreground,
+                            color:
+                              sortBy === "title"
+                                ? colors.primaryForeground
+                                : colors.foreground,
                           },
                         ]}
                       >
@@ -419,8 +520,14 @@ export default function HomeScreen() {
                       style={[
                         styles.sortChip,
                         {
-                          backgroundColor: sortBy === "username" ? colors.primary : colors.secondary,
-                          borderColor: sortBy === "username" ? colors.primary : colors.border,
+                          backgroundColor:
+                            sortBy === "username"
+                              ? colors.primary
+                              : colors.secondary,
+                          borderColor:
+                            sortBy === "username"
+                              ? colors.primary
+                              : colors.border,
                         },
                       ]}
                       onPress={() => setSortBy("username")}
@@ -431,7 +538,9 @@ export default function HomeScreen() {
                           styles.sortChipText,
                           {
                             color:
-                              sortBy === "username" ? colors.primaryForeground : colors.foreground,
+                              sortBy === "username"
+                                ? colors.primaryForeground
+                                : colors.foreground,
                           },
                         ]}
                       >
@@ -443,11 +552,22 @@ export default function HomeScreen() {
 
                 {sortedFiltered.length === 0 && search.length > 0 && (
                   <View style={styles.empty}>
-                    <Feather name="search" size={36} color={colors.mutedForeground} />
-                    <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                    <Feather
+                      name="search"
+                      size={36}
+                      color={colors.mutedForeground}
+                    />
+                    <Text
+                      style={[styles.emptyTitle, { color: colors.foreground }]}
+                    >
                       No results
                     </Text>
-                    <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                    <Text
+                      style={[
+                        styles.emptyText,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
                       No games matched your search
                     </Text>
                   </View>
@@ -456,9 +576,7 @@ export default function HomeScreen() {
             )}
           </>
         }
-        renderItem={({ item }) => (
-          <GameRow game={item} onEdit={handleEdit} />
-        )}
+        renderItem={({ item }) => <GameRow game={item} onEdit={handleEdit} />}
       />
 
       <AddEditModal
