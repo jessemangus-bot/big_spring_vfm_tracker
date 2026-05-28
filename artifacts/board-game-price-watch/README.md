@@ -7,6 +7,8 @@ The app tracks board games a user wants and notifies them when an available copy
 ## MVP Included
 
 - Universal Apple app structure for iOS, iPadOS, and macOS
+- BoardGameGeek search when adding a game
+- BGG game ID/year stored on each watch item so the exact game is targeted
 - Local watchlist persistence
 - Target price per game
 - Preferred condition per game
@@ -35,4 +37,3 @@ Schemes:
 
 - `BoardGamePriceWatch iOS`
 - `BoardGamePriceWatch macOS`
-

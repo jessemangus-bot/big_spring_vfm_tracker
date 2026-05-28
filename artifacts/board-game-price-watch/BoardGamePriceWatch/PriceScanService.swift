@@ -21,8 +21,8 @@ struct PriceScanService {
         let normalizedTitle = item.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalizedTitle.isEmpty else { return nil }
 
-        let catalog: [String: BoardGameOffer] = [
-            "ark nova": BoardGameOffer(
+        let catalog: [Int: BoardGameOffer] = [
+            342942: BoardGameOffer(
                 id: "demo-ark-nova-45",
                 gameTitle: "Ark Nova",
                 price: 44.99,
@@ -32,7 +32,7 @@ struct PriceScanService {
                 listingURL: URL(string: "https://boardgamegeek.com/boardgame/342942/ark-nova"),
                 observedAt: Date()
             ),
-            "dune: imperium": BoardGameOffer(
+            316554: BoardGameOffer(
                 id: "demo-dune-imperium-36",
                 gameTitle: "Dune: Imperium",
                 price: 36.00,
@@ -42,7 +42,7 @@ struct PriceScanService {
                 listingURL: nil,
                 observedAt: Date()
             ),
-            "brass: birmingham": BoardGameOffer(
+            224517: BoardGameOffer(
                 id: "demo-brass-birmingham-58",
                 gameTitle: "Brass: Birmingham",
                 price: 58.00,
@@ -54,11 +54,14 @@ struct PriceScanService {
             ),
         ]
 
-        if let exact = catalog[normalizedTitle] {
+        if let bggID = item.bggID, let exact = catalog[bggID] {
             return exact
         }
 
-        return catalog.first { normalizedTitle.contains($0.key) || $0.key.contains(normalizedTitle) }?.value
+        return catalog.first {
+            let gameTitle = $0.value.gameTitle.lowercased()
+            return normalizedTitle.contains(gameTitle) || gameTitle.contains(normalizedTitle)
+        }?.value
     }
 
     private func conditionMatches(_ offerCondition: GameCondition, _ preferredCondition: GameCondition) -> Bool {
@@ -76,4 +79,3 @@ struct PriceScanService {
         return (ranking[offerCondition] ?? 0) >= (ranking[preferredCondition] ?? 0)
     }
 }
-

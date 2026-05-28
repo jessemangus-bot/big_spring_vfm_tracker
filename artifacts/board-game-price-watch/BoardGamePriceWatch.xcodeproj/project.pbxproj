@@ -19,6 +19,10 @@
 		A1000000000000000000000A /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000014 /* NotificationManager.swift */; };
 		A1000000000000000000000B /* WatchlistStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* WatchlistStore.swift */; };
 		A1000000000000000000000C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000016 /* ContentView.swift */; };
+		A1000000000000000000000D /* BoardGameGeekService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000019 /* BoardGameGeekService.swift */; };
+		A1000000000000000000000E /* BoardGameSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001A /* BoardGameSearchView.swift */; };
+		A1000000000000000000000F /* BoardGameGeekService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000019 /* BoardGameGeekService.swift */; };
+		A10000000000000000000010 /* BoardGameSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001A /* BoardGameSearchView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +34,8 @@
 		A10000000000000000000016 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A10000000000000000000017 /* BoardGamePriceWatch iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BoardGamePriceWatch iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000018 /* BoardGamePriceWatch macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BoardGamePriceWatch macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000019 /* BoardGameGeekService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardGameGeekService.swift; sourceTree = "<group>"; };
+		A1000000000000000000001A /* BoardGameSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardGameSearchView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -47,9 +53,11 @@
 				A10000000000000000000011 /* BoardGamePriceWatchApp.swift */,
 				A10000000000000000000012 /* Models.swift */,
 				A10000000000000000000013 /* PriceScanService.swift */,
+				A10000000000000000000019 /* BoardGameGeekService.swift */,
 				A10000000000000000000014 /* NotificationManager.swift */,
 				A10000000000000000000015 /* WatchlistStore.swift */,
 				A10000000000000000000016 /* ContentView.swift */,
+				A1000000000000000000001A /* BoardGameSearchView.swift */,
 			);
 			path = BoardGamePriceWatch;
 			sourceTree = "<group>";
@@ -182,6 +190,8 @@
 				A10000000000000000000004 /* NotificationManager.swift in Sources */,
 				A10000000000000000000005 /* WatchlistStore.swift in Sources */,
 				A10000000000000000000006 /* ContentView.swift in Sources */,
+				A1000000000000000000000D /* BoardGameGeekService.swift in Sources */,
+				A1000000000000000000000E /* BoardGameSearchView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -195,6 +205,8 @@
 				A1000000000000000000000A /* NotificationManager.swift in Sources */,
 				A1000000000000000000000B /* WatchlistStore.swift in Sources */,
 				A1000000000000000000000C /* ContentView.swift in Sources */,
+				A1000000000000000000000F /* BoardGameGeekService.swift in Sources */,
+				A10000000000000000000010 /* BoardGameSearchView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -460,4 +472,3 @@
 	};
 	rootObject = A10000000000000000000050 /* Project object */;
 }
-

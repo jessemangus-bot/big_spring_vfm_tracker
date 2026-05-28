@@ -19,7 +19,8 @@ final class WatchlistStore: ObservableObject {
 
         return Binding(
             get: { [weak self] in
-                self?.items.first(where: { $0.id == id }) ?? BoardGameWatchItem(title: "", maximumPrice: 0)
+                self?.items.first(where: { $0.id == id })
+                    ?? BoardGameWatchItem(title: "", maximumPrice: 0)
             },
             set: { [weak self] newValue in
                 self?.update(newValue)
@@ -27,8 +28,8 @@ final class WatchlistStore: ObservableObject {
         )
     }
 
-    func addBlankItem() -> UUID {
-        let item = BoardGameWatchItem(title: "New game", maximumPrice: 40)
+    func addItem(reference: BoardGameReference) -> UUID {
+        let item = BoardGameWatchItem(reference: reference, maximumPrice: 40)
         items.insert(item, at: 0)
         save()
         return item.id
@@ -115,9 +116,24 @@ final class WatchlistStore: ObservableObject {
     }
 
     private static let sampleItems: [BoardGameWatchItem] = [
-        BoardGameWatchItem(title: "Ark Nova", maximumPrice: 50, preferredCondition: .good, sourceHint: "BGG Market"),
-        BoardGameWatchItem(title: "Dune: Imperium", maximumPrice: 40, preferredCondition: .likeNew, sourceHint: "Retail or local"),
-        BoardGameWatchItem(title: "Brass: Birmingham", maximumPrice: 55, preferredCondition: .good, sourceHint: "Any trusted source"),
+        BoardGameWatchItem(
+            reference: BoardGameReference(bggID: 342942, name: "Ark Nova", yearPublished: 2021),
+            maximumPrice: 50,
+            preferredCondition: .good,
+            sourceHint: "BGG Market"
+        ),
+        BoardGameWatchItem(
+            reference: BoardGameReference(bggID: 316554, name: "Dune: Imperium", yearPublished: 2020),
+            maximumPrice: 40,
+            preferredCondition: .likeNew,
+            sourceHint: "Retail or local"
+        ),
+        BoardGameWatchItem(
+            reference: BoardGameReference(bggID: 224517, name: "Brass: Birmingham", yearPublished: 2018),
+            maximumPrice: 55,
+            preferredCondition: .good,
+            sourceHint: "Any trusted source"
+        ),
     ]
 }
 

@@ -5,6 +5,7 @@ struct ContentView: View {
     @StateObject private var store = WatchlistStore()
     @StateObject private var notificationManager = NotificationManager()
     @State private var selection: BoardGameWatchItem.ID?
+    @State private var isShowingGameSearch = false
 
     var body: some View {
         NavigationSplitView {
@@ -28,7 +29,7 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItemGroup {
                     Button {
-                        selection = store.addBlankItem()
+                        isShowingGameSearch = true
                     } label: {
                         Label("Add Game", systemImage: "plus")
                     }
@@ -66,8 +67,13 @@ struct ContentView: View {
                 )
             } else {
                 EmptyStateView {
-                    selection = store.addBlankItem()
+                    isShowingGameSearch = true
                 }
+            }
+        }
+        .sheet(isPresented: $isShowingGameSearch) {
+            BoardGameSearchView { reference in
+                selection = store.addItem(reference: reference)
             }
         }
         .onAppear {
@@ -84,7 +90,7 @@ private struct WatchlistRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(item.title)
+                Text(item.displayTitle)
                     .font(.headline)
                     .lineLimit(1)
 
@@ -98,6 +104,10 @@ private struct WatchlistRow: View {
 
             HStack(spacing: 8) {
                 Text("Target \(item.maximumPrice.formatted(.currency(code: "USD")))")
+
+                if let bggID = item.bggID {
+                    Text("BGG #\(bggID)")
+                }
 
                 if let offer = item.lastMatchedOffer {
                     Text("Found \(offer.price.formatted(.currency(code: "USD")))")
@@ -122,8 +132,23 @@ private struct WatchItemDetail: View {
 
     var body: some View {
         Form {
-            Section("Game") {
-                TextField("Board game title", text: $item.title)
+            Section("BGG Reference") {
+                if let reference = item.bggReference {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(reference.displayTitle)
+                            .font(.headline)
+
+                        Link(destination: reference.boardGameGeekURL) {
+                            Label("BoardGameGeek #\(reference.bggID)", systemImage: "arrow.up.right.square")
+                        }
+                    }
+                    .padding(.vertical, 4)
+                } else {
+                    TextField("Board game title", text: $item.title)
+                }
+            }
+
+            Section("Watch Settings") {
                 TextField("Maximum price", value: $item.maximumPrice, format: .currency(code: "USD"))
 
                 Picker("Minimum condition", selection: $item.preferredCondition) {
@@ -185,7 +210,7 @@ private struct WatchItemDetail: View {
                 }
             }
         }
-        .navigationTitle(item.title.isEmpty ? "Game Watch" : item.title)
+        .navigationTitle(item.displayTitle.isEmpty ? "Game Watch" : item.displayTitle)
     }
 
     private var notificationButtonTitle: String {
