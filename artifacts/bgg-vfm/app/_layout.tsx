@@ -28,6 +28,10 @@ function RootLayoutNav() {
       <Stack.Screen name="wishlist" options={{ title: "Wishlist" }} />
       <Stack.Screen name="for-trade" options={{ title: "For Trade" }} />
       <Stack.Screen name="browse-vfm" options={{ title: "Browse VFM" }} />
+      <Stack.Screen
+        name="auction-tracker"
+        options={{ title: "Auction Tracker" }}
+      />
     </Stack>
   );
 }
