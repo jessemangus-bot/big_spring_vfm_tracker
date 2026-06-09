@@ -164,6 +164,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /bgg/auction/bids:
+    get:
+      operationId: getBggAuctionBids
+      tags: [bgg]
+      summary: Fetch auction bid standings for a geeklist
+      description: Returns every item in a BGG geeklist auction with its current high bid, high bidder, and parsing-confidence flags. Optionally highlights a username's winning/outbid status.
+      parameters:
+        - name: listId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The BGG geeklist ID (extracted from the URL)
+        - name: username
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional BGG username to compute winning/outbid status for
+      responses:
+        "200":
+          description: Auction bid standings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BggAuctionBidsResponse"
+        "202":
+          description: BGG is still preparing the geeklist
+          headers:
+            Retry-After:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Missing listId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: BGG API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -344,3 +392,107 @@ components:
           type: string
       required:
         - error
+    BggAuctionHighBid:
+      type: object
+      properties:
+        amount:
+          type: number
+        username:
+          type: string
+        viaBin:
+          type: boolean
+        flags:
+          type: array
+          items:
+            type: string
+        raw:
+          type: string
+      required:
+        - amount
+        - username
+        - viaBin
+        - flags
+        - raw
+    BggAuctionBid:
+      type: object
+      properties:
+        username:
+          type: string
+        amount:
+          type: number
+      required:
+        - username
+        - amount
+    BggAuctionItem:
+      type: object
+      properties:
+        id:
+          type: string
+        objectId:
+          type: string
+        gameTitle:
+          type: string
+        seller:
+          type: string
+        startingBid:
+          type: number
+        binPrice:
+          type: number
+        bidCount:
+          type: integer
+        highBid:
+          oneOf:
+            - $ref: "#/components/schemas/BggAuctionHighBid"
+            - type: "null"
+        yourStatus:
+          type: string
+          enum: [winning, outbid]
+          nullable: true
+        yourBest:
+          type: number
+          nullable: true
+        bids:
+          type: array
+          items:
+            $ref: "#/components/schemas/BggAuctionBid"
+        bggUrl:
+          type: string
+      required:
+        - id
+        - gameTitle
+        - seller
+        - startingBid
+        - binPrice
+        - bidCount
+        - bids
+        - bggUrl
+    BggAuctionBidsResponse:
+      type: object
+      properties:
+        listId:
+          type: string
+        listTitle:
+          type: string
+        totalItems:
+          type: integer
+        itemsWithBids:
+          type: integer
+        highBidTotal:
+          type: number
+        yourWinning:
+          type: integer
+          nullable: true
+        yourOutbid:
+          type: integer
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BggAuctionItem"
+      required:
+        - listId
+        - listTitle
+        - totalItems
+        - itemsWithBids
+        - highBidTotal
+        - items
