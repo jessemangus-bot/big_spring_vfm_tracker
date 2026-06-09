@@ -206,6 +206,13 @@ export default function HomeScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
+            onPress={() => router.push("/auction-tracker" as any)}
+            activeOpacity={0.8}
+          >
+            <Feather name="trending-up" size={18} color={colors.foreground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
             onPress={() => router.push("/for-trade" as any)}
             activeOpacity={0.8}
           >
