@@ -6,6 +6,7 @@ import {
   Alert,
   FlatList,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -191,38 +192,29 @@ export default function HomeScreen() {
             <Feather name="settings" size={18} color={colors.foreground} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
-            onPress={() => router.push("/wishlist")}
+            style={[styles.iconBtn, { backgroundColor: colors.primary }]}
+            onPress={handleAdd}
             activeOpacity={0.8}
           >
-            <Feather name="heart" size={18} color={colors.foreground} />
+            <Feather name="plus" size={20} color={colors.primaryForeground} />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
-            onPress={() => router.push("/browse-vfm" as any)}
-            activeOpacity={0.8}
-          >
-            <Feather name="list" size={18} color={colors.foreground} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
-            onPress={() => router.push("/auction-tracker" as any)}
-            activeOpacity={0.8}
-          >
-            <Feather name="trending-up" size={18} color={colors.foreground} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
-            onPress={() => router.push("/for-trade" as any)}
-            activeOpacity={0.8}
-          >
-            <Feather name="repeat" size={18} color={colors.foreground} />
-          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View
+        style={[styles.quickNavWrap, { borderBottomColor: colors.border }]}
+      >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickNav}
+        >
           <TouchableOpacity
             style={[
-              styles.iconBtn,
+              styles.quickNavBtn,
               {
-                backgroundColor: colors.secondary,
+                backgroundColor: colors.card,
+                borderColor: colors.border,
                 opacity: isSyncing ? 0.5 : 1,
               },
             ]}
@@ -231,19 +223,67 @@ export default function HomeScreen() {
             activeOpacity={0.8}
           >
             {isSyncing ? (
-              <ActivityIndicator size="small" color={colors.foreground} />
+              <ActivityIndicator size="small" color={colors.accent} />
             ) : (
-              <Feather name="refresh-cw" size={18} color={colors.foreground} />
+              <Feather name="refresh-cw" size={16} color={colors.accent} />
             )}
+            <Text style={[styles.quickNavText, { color: colors.foreground }]}>
+              {isSyncing ? "Syncing…" : "Sync BGG"}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.iconBtn, { backgroundColor: colors.primary }]}
-            onPress={handleAdd}
+            style={[
+              styles.quickNavBtn,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={() => router.push("/auction-tracker" as any)}
             activeOpacity={0.8}
           >
-            <Feather name="plus" size={20} color={colors.primaryForeground} />
+            <Feather name="trending-up" size={16} color={colors.accent} />
+            <Text style={[styles.quickNavText, { color: colors.foreground }]}>
+              Auctions
+            </Text>
           </TouchableOpacity>
-        </View>
+          <TouchableOpacity
+            style={[
+              styles.quickNavBtn,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={() => router.push("/browse-vfm" as any)}
+            activeOpacity={0.8}
+          >
+            <Feather name="list" size={16} color={colors.accent} />
+            <Text style={[styles.quickNavText, { color: colors.foreground }]}>
+              Browse VFM
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.quickNavBtn,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={() => router.push("/wishlist")}
+            activeOpacity={0.8}
+          >
+            <Feather name="heart" size={16} color={colors.accent} />
+            <Text style={[styles.quickNavText, { color: colors.foreground }]}>
+              Wishlist
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.quickNavBtn,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={() => router.push("/for-trade" as any)}
+            activeOpacity={0.8}
+          >
+            <Feather name="repeat" size={16} color={colors.accent} />
+            <Text style={[styles.quickNavText, { color: colors.foreground }]}>
+              For Trade
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       <FlatList
@@ -262,54 +302,62 @@ export default function HomeScreen() {
             </Text>
 
             <View style={styles.statsGrid}>
-              <StatCard
-                label="Listed for Sale"
-                value={stats.listedCount}
-                sub="active listings"
-                accent="info"
-              />
-              <StatCard
-                label="Games Sold"
-                value={stats.soldCount}
-                sub="completed sales"
-                accent="success"
-              />
-              <StatCard
-                label="Games Purchased"
-                value={stats.purchasedCount}
-                sub="acquisitions"
-                accent="warning"
-              />
-              <StatCard
-                label="Offers"
-                value={stats.offerCount}
-                sub="awaiting confirmation"
-                accent="info"
-              />
-              <StatCard
-                label="Auctions Winning"
-                value={stats.winningCount}
-                sub="currently highest bidder"
-                accent="success"
-              />
-              <StatCard
-                label="Auctions Outbid"
-                value={stats.outbidCount}
-                sub="someone bid higher"
-                accent="destructive"
-              />
-              <StatCard
-                label="Amount Owed"
-                value={`$${stats.amountOwed.toFixed(2)}`}
-                sub="total owed for purchases"
-                accent="destructive"
-              />
-              <StatCard
-                label="Amount Earned"
-                value={`$${stats.amountEarned.toFixed(2)}`}
-                sub="from completed sales"
-                accent="success"
-              />
+              <View style={styles.statRow}>
+                <StatCard
+                  label="Listed"
+                  value={stats.listedCount}
+                  accent="info"
+                  compact
+                />
+                <StatCard
+                  label="Sold"
+                  value={stats.soldCount}
+                  accent="success"
+                  compact
+                />
+              </View>
+              <View style={styles.statRow}>
+                <StatCard
+                  label="Purchased"
+                  value={stats.purchasedCount}
+                  accent="warning"
+                  compact
+                />
+                <StatCard
+                  label="Offers"
+                  value={stats.offerCount}
+                  accent="info"
+                  compact
+                />
+              </View>
+              <View style={styles.statRow}>
+                <StatCard
+                  label="Winning"
+                  value={stats.winningCount}
+                  accent="success"
+                  compact
+                />
+                <StatCard
+                  label="Outbid"
+                  value={stats.outbidCount}
+                  accent="destructive"
+                  compact
+                />
+              </View>
+              <View style={styles.statRow}>
+                <StatCard
+                  label="Owed"
+                  value={`$${stats.amountOwed.toFixed(2)}`}
+                  accent="destructive"
+                  compact
+                />
+                <StatCard
+                  label="Earned"
+                  value={`$${stats.amountEarned.toFixed(2)}`}
+                  accent="success"
+                  compact
+                />
+              </View>
             </View>
 
             {games.length === 0 ? (
@@ -386,7 +434,12 @@ export default function HomeScreen() {
                   )}
                 </View>
 
-                <View style={styles.filterRow}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.filterScroll}
+                  contentContainerStyle={styles.filterRow}
+                >
                   {(
                     [
                       "all",
@@ -451,7 +504,7 @@ export default function HomeScreen() {
                       </TouchableOpacity>
                     );
                   })}
-                </View>
+                </ScrollView>
 
                 <View style={styles.sortSection}>
                   <Text
@@ -637,14 +690,37 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },
+  quickNavWrap: {
+    borderBottomWidth: 1,
+  },
+  quickNav: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  quickNavBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    minHeight: 40,
+  },
+  quickNavText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
   list: { padding: 16 },
-  statsGrid: { marginBottom: 20 },
+  statsGrid: { marginBottom: 20, gap: 10 },
+  statRow: { flexDirection: "row", gap: 10 },
   dashboardTitle: {
     fontSize: 20,
     fontFamily: "Inter_700Bold",
@@ -694,11 +770,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_400Regular",
   },
+  filterScroll: {
+    marginBottom: 12,
+    marginHorizontal: -16,
+  },
   filterRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 8,
-    marginBottom: 12,
+    paddingHorizontal: 16,
   },
   sortSection: {
     marginBottom: 16,
@@ -718,7 +797,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 18,
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 9,
+    minHeight: 38,
+    justifyContent: "center",
   },
   sortChipText: {
     fontSize: 13,
@@ -728,7 +809,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 7,
+    paddingVertical: 9,
+    minHeight: 38,
+    justifyContent: "center",
   },
   filterChipText: {
     fontSize: 13,
