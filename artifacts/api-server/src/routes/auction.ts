@@ -161,7 +161,9 @@ function parseBidFromComment(
 
   const isBin = /\b(bin|buy\s*it\s*now)\b/i.test(normalized);
 
-  const moneyRe = /\$?\s?(\d{1,4}(?:,\d{3})*(?:\.\d{1,2})?)/g;
+  // Only $-prefixed figures count as bid amounts. Bare numbers are ignored
+  // entirely — they are usually zip codes, dates, quantities, or chatter.
+  const moneyRe = /\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)\b/g;
   const amounts = [...normalized.matchAll(moneyRe)]
     .map((m) => Number(m[1].replace(/,/g, "")))
     .filter((n) => Number.isFinite(n) && n > 0 && n < 100000);
@@ -173,23 +175,13 @@ function parseBidFromComment(
       : null;
   }
 
-  const hasDollar = /\$/.test(normalized);
-  const looksLikeBid =
-    hasDollar ||
-    isBin ||
-    /\b(bid|i'?ll\s+(?:do|take|go)|offer)\b/i.test(normalized) ||
-    /^\s*\d+(?:\.\d{1,2})?\s*$/.test(normalized);
-
-  if (!looksLikeBid) return null;
-
   const amount = Math.max(...amounts);
   const flags: string[] = [];
-  if (!hasDollar && !/^\s*\d+(?:\.\d{1,2})?\s*$/.test(normalized)) {
-    flags.push("no $ sign — amount inferred from words");
+  if (amounts.length > 1) {
+    flags.push("multiple $ amounts in comment — using the largest");
   }
-  if (amounts.length > 1) flags.push("multiple numbers in comment");
-  if (/\bship|shipping|shipped\b/i.test(normalized) && !hasDollar) {
-    flags.push("mentions shipping — figure may not be the bid");
+  if (/\bship|shipping|shipped\b/i.test(normalized)) {
+    flags.push("mentions shipping — amount may include or be shipping");
   }
 
   return { username, amount, isBin, flags, raw: normalized };
