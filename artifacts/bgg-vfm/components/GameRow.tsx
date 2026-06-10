@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { Game, useVFM } from "@/context/VFMContext";
 
@@ -55,6 +55,17 @@ export function GameRow({ game, onEdit }: GameRowProps) {
       : "tag";
 
   const handleDelete = () => {
+    if (Platform.OS === "web") {
+      // React Native Web's Alert.alert with buttons is a silent no-op, so
+      // the trash icon did nothing in browsers. Use the native dialog.
+      const confirmFn = (globalThis as { confirm?: (msg: string) => boolean })
+        .confirm;
+      const confirmed = confirmFn
+        ? confirmFn(`Remove "${game.title}" from the tracker?`)
+        : true;
+      if (confirmed) deleteGame(game.id);
+      return;
+    }
     Alert.alert("Delete Entry", `Remove "${game.title}"?`, [
       { text: "Cancel", style: "cancel" },
       {
