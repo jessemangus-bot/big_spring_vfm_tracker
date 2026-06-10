@@ -33,7 +33,7 @@ const STATUS_LABELS: Record<ListingStatus, string> = {
 export function AddEditModal({ visible, editGame, onClose }: AddEditModalProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { addGame, updateGame } = useVFM();
+  const { addGame, updateGame, deleteGame } = useVFM();
 
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
@@ -41,8 +41,10 @@ export function AddEditModal({ visible, editGame, onClose }: AddEditModalProps) 
   const [status, setStatus] = useState<ListingStatus>("listed");
   const [buyerSeller, setBuyerSeller] = useState("");
   const [notes, setNotes] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
+    setConfirmDelete(false);
     if (editGame) {
       setTitle(editGame.title);
       setPrice(editGame.price.toString());
@@ -205,6 +207,51 @@ export function AddEditModal({ visible, editGame, onClose }: AddEditModalProps) 
             numberOfLines={3}
           />
 
+          {editGame && editGame.source === "manual" ? (
+            <TouchableOpacity
+              style={[
+                styles.deleteBtn,
+                {
+                  borderColor: colors.destructive,
+                  backgroundColor: confirmDelete
+                    ? colors.destructive
+                    : "transparent",
+                },
+              ]}
+              onPress={() => {
+                if (!confirmDelete) {
+                  setConfirmDelete(true);
+                  return;
+                }
+                deleteGame(editGame.id);
+                onClose();
+              }}
+              activeOpacity={0.8}
+            >
+              <Feather
+                name="trash-2"
+                size={16}
+                color={
+                  confirmDelete
+                    ? colors.destructiveForeground
+                    : colors.destructive
+                }
+              />
+              <Text
+                style={[
+                  styles.deleteBtnText,
+                  {
+                    color: confirmDelete
+                      ? colors.destructiveForeground
+                      : colors.destructive,
+                  },
+                ]}
+              >
+                {confirmDelete ? "Tap again to confirm delete" : "Delete entry"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
           <PoweredByBGG style={styles.attribution} />
 
           <View style={{ height: insets.bottom + 32 }} />
@@ -217,6 +264,20 @@ export function AddEditModal({ visible, editGame, onClose }: AddEditModalProps) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  deleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    minHeight: 44,
+    marginTop: 24,
+  },
+  deleteBtnText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
   },
   header: {
     flexDirection: "row",
