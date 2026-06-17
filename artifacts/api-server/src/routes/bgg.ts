@@ -1303,6 +1303,9 @@ router.get("/bgg/my-collection", async (req, res) => {
   }
 
   try {
+    const parser = createBggXmlParser(["item", "link"]);
+
+    // ── Base games (owned, no expansions) ────────────────────────────────────
     const collectionXml = await fetchBggXmlText(
       `${BGG_COLLECTION_API_BASE}?username=${encodeURIComponent(username)}&stats=1&own=1&subtype=boardgame&excludesubtype=boardgameexpansion`,
       apiToken,
@@ -1311,7 +1314,6 @@ router.get("/bgg/my-collection", async (req, res) => {
       BGG_FETCH_TIMEOUT_MS,
     );
 
-    const parser = createBggXmlParser(["item", "link"]);
     const parsed = parser.parse(collectionXml);
     const rawItems = asArray(parsed.items?.item ?? []);
 
@@ -1339,13 +1341,36 @@ router.get("/bgg/my-collection", async (req, res) => {
       });
     }
 
-    const objectIds = [...collectionMap.keys()];
+    // ── Owned expansions (for player-count merging) ───────────────────────────
+    let expansionObjectIds: string[] = [];
+    try {
+      const expansionXml = await fetchBggXmlText(
+        `${BGG_COLLECTION_API_BASE}?username=${encodeURIComponent(username)}&own=1&subtype=boardgameexpansion`,
+        apiToken,
+        "BGG expansion collection",
+        "BGG collection API",
+        BGG_FETCH_TIMEOUT_MS,
+      );
+      const expParsed = parser.parse(expansionXml);
+      expansionObjectIds = asArray(expParsed.items?.item ?? [])
+        .map((item: any) => String(item["@_objectid"] ?? ""))
+        .filter(Boolean);
+    } catch {
+      // Non-fatal — proceed without expansion player-count data
+    }
+
+    // ── Batch-fetch thing data for base games + expansions ────────────────────
+    const expansionIdSet = new Set(expansionObjectIds);
+    // Map of expansionObjectId → { minPlayers, maxPlayers, baseGameIds[] }
+    const expansionData = new Map<string, { min: number; max: number; baseIds: string[] }>();
+
+    const allIds = [...collectionMap.keys(), ...expansionObjectIds];
     const BATCH_SIZE = 100;
-    for (let i = 0; i < objectIds.length; i += BATCH_SIZE) {
-      const batch = objectIds.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
+      const batch = allIds.slice(i, i + BATCH_SIZE);
       try {
         const thingXml = await fetchBggXmlText(
-          `${BGG_THING_API_BASE}?id=${batch.join(",")}&type=boardgame`,
+          `${BGG_THING_API_BASE}?id=${batch.join(",")}&type=boardgame,boardgameexpansion`,
           apiToken,
           "BGG thing",
           "BGG thing API",
@@ -1353,22 +1378,47 @@ router.get("/bgg/my-collection", async (req, res) => {
         );
         const thingParsed = parser.parse(thingXml);
         const thingItems = asArray(thingParsed.items?.item ?? []);
+
         for (const thing of thingItems) {
           const id = String(thing["@_id"] ?? "");
-          if (!collectionMap.has(id)) continue;
           const links = asArray(thing.link ?? []);
-          const game = collectionMap.get(id)!;
-          game.categories = links
-            .filter((l: any) => l["@_type"] === "boardgamecategory")
-            .map((l: any) => String(l["@_value"] ?? ""))
-            .filter(Boolean);
-          game.mechanics = links
-            .filter((l: any) => l["@_type"] === "boardgamemechanic")
-            .map((l: any) => String(l["@_value"] ?? ""))
-            .filter(Boolean);
+
+          if (expansionIdSet.has(id)) {
+            // Expansion: record its player count + which base games it expands
+            const minP = parseInt(thing.minplayers?.["@_value"] ?? "0");
+            const maxP = parseInt(thing.maxplayers?.["@_value"] ?? "0");
+            const baseIds = links
+              .filter((l: any) => l["@_type"] === "boardgameexpansion" && l["@_inbound"] === "true")
+              .map((l: any) => String(l["@_id"] ?? ""))
+              .filter(Boolean);
+            if (minP > 0 && maxP > 0) {
+              expansionData.set(id, { min: minP, max: maxP, baseIds });
+            }
+          } else if (collectionMap.has(id)) {
+            // Base game: extract categories + mechanics
+            const game = collectionMap.get(id)!;
+            game.categories = links
+              .filter((l: any) => l["@_type"] === "boardgamecategory")
+              .map((l: any) => String(l["@_value"] ?? ""))
+              .filter(Boolean);
+            game.mechanics = links
+              .filter((l: any) => l["@_type"] === "boardgamemechanic")
+              .map((l: any) => String(l["@_value"] ?? ""))
+              .filter(Boolean);
+          }
         }
       } catch (batchErr) {
-        req.log.warn({ batchErr, batchStart: i }, "Thing API batch failed — skipping categories/mechanics for batch");
+        req.log.warn({ batchErr, batchStart: i }, "Thing API batch failed — skipping enrichment for batch");
+      }
+    }
+
+    // ── Merge expansion player counts into base games ─────────────────────────
+    for (const { min, max, baseIds } of expansionData.values()) {
+      for (const baseId of baseIds) {
+        const game = collectionMap.get(baseId);
+        if (!game) continue;
+        if (!game.minPlayers || min < game.minPlayers) game.minPlayers = min;
+        if (!game.maxPlayers || max > game.maxPlayers) game.maxPlayers = max;
       }
     }
 
