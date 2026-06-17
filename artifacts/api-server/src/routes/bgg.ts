@@ -1243,7 +1243,11 @@ router.get("/bgg/marketplace-prices", async (req, res) => {
       return;
     }
 
-    const listings = asArray(rawItem.marketplace?.listing ?? []);
+    const listings = asArray(
+      rawItem.marketplacelistings?.listing ??
+      rawItem.marketplace?.listing ??
+      [],
+    );
     const prices = listings
       .map((l: any) => parseFloat(l.price?.["@_value"]))
       .filter((p: number) => Number.isFinite(p) && p > 0);
