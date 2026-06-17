@@ -1289,4 +1289,99 @@ router.get("/bgg/marketplace-prices", async (req, res) => {
   }
 });
 
+// ── GET /bgg/my-collection ────────────────────────────────────────────────────
+router.get("/bgg/my-collection", async (req, res) => {
+  const { username } = req.query as Record<string, string>;
+  if (!username) {
+    res.status(400).json({ error: "username is required" });
+    return;
+  }
+  const apiToken = process.env[BGG_API_TOKEN_ENV_VAR]?.trim();
+  if (!apiToken) {
+    res.status(500).json({ error: `Missing ${BGG_API_TOKEN_ENV_VAR} configuration` });
+    return;
+  }
+
+  try {
+    const collectionXml = await fetchBggXmlText(
+      `${BGG_COLLECTION_API_BASE}?username=${encodeURIComponent(username)}&stats=1&own=1&subtype=boardgame&excludesubtype=boardgameexpansion`,
+      apiToken,
+      "BGG collection",
+      "BGG collection API",
+      BGG_FETCH_TIMEOUT_MS,
+    );
+
+    const parser = createBggXmlParser(["item", "link"]);
+    const parsed = parser.parse(collectionXml);
+    const rawItems = asArray(parsed.items?.item ?? []);
+
+    if (rawItems.length === 0) {
+      res.json({ username, games: [] });
+      return;
+    }
+
+    const collectionMap = new Map<string, any>();
+    for (const item of rawItems) {
+      const objectId = String(item["@_objectid"] ?? "");
+      if (!objectId) continue;
+      const stats = item.stats ?? {};
+      const weightRaw = parseFloat(stats.rating?.averageweight?.["@_value"] ?? "0");
+      collectionMap.set(objectId, {
+        objectId,
+        title: asText(item.name),
+        thumbnail: asText(item.thumbnail) || undefined,
+        minPlayers: parseInt(stats["@_minplayers"] ?? "0") || undefined,
+        maxPlayers: parseInt(stats["@_maxplayers"] ?? "0") || undefined,
+        playTime: parseInt(stats["@_playingtime"] ?? "0") || undefined,
+        weight: Number.isFinite(weightRaw) && weightRaw > 0 ? weightRaw : undefined,
+        categories: [] as string[],
+        mechanics: [] as string[],
+      });
+    }
+
+    const objectIds = [...collectionMap.keys()];
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < objectIds.length; i += BATCH_SIZE) {
+      const batch = objectIds.slice(i, i + BATCH_SIZE);
+      try {
+        const thingXml = await fetchBggXmlText(
+          `${BGG_THING_API_BASE}?id=${batch.join(",")}&type=boardgame`,
+          apiToken,
+          "BGG thing",
+          "BGG thing API",
+          BGG_FETCH_TIMEOUT_MS,
+        );
+        const thingParsed = parser.parse(thingXml);
+        const thingItems = asArray(thingParsed.items?.item ?? []);
+        for (const thing of thingItems) {
+          const id = String(thing["@_id"] ?? "");
+          if (!collectionMap.has(id)) continue;
+          const links = asArray(thing.link ?? []);
+          const game = collectionMap.get(id)!;
+          game.categories = links
+            .filter((l: any) => l["@_type"] === "boardgamecategory")
+            .map((l: any) => String(l["@_value"] ?? ""))
+            .filter(Boolean);
+          game.mechanics = links
+            .filter((l: any) => l["@_type"] === "boardgamemechanic")
+            .map((l: any) => String(l["@_value"] ?? ""))
+            .filter(Boolean);
+        }
+      } catch (batchErr) {
+        req.log.warn({ batchErr, batchStart: i }, "Thing API batch failed — skipping categories/mechanics for batch");
+      }
+    }
+
+    res.json({ username, games: [...collectionMap.values()] });
+  } catch (err: any) {
+    if (err instanceof BggProcessingError) {
+      res.status(202).json({ error: err.message });
+      return;
+    }
+    req.log.error({ err }, "BGG my-collection fetch failed");
+    res.status(502).json({ error: err.message ?? "Failed to fetch collection" });
+  }
+});
+
 export default router;
+
