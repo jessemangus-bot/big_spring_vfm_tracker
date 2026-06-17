@@ -119,9 +119,13 @@ export function AddToVfmReviewModal({
     // Copy post body to clipboard first so user can paste into the BGG form
     Share.share({ message: buildPostBody() }).catch(() => {});
 
-    // Open the geeklist's add-item page on BGG
+    // Open the geeklist's add-item page in a new browser tab/window
     const url = `https://boardgamegeek.com/geeklist/${listId}`;
-    Linking.openURL(url).catch(() => {});
+    if (Platform.OS === "web") {
+      window.open(url, "_blank", "noopener,noreferrer");
+    } else {
+      Linking.openURL(url).catch(() => {});
+    }
     onClose();
   };
 
