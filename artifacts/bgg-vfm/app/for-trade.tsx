@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
 import { getBaseUrl } from "@workspace/api-client-react";
 import { Stack } from "expo-router";
@@ -7,6 +8,7 @@ import {
   FlatList,
   Image,
   Linking,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -18,6 +20,18 @@ import { AppFooter } from "@/components/AppFooter";
 import { AddToVfmReviewModal, VfmPostItem } from "@/components/AddToVfmReviewModal";
 import { useVFM } from "@/context/VFMContext";
 import { useColors } from "@/hooks/useColors";
+
+const TRACKED_AUCTIONS_KEY = "auctionTracker:trackedLists";
+
+interface TrackedAuction {
+  listId: string;
+  title: string;
+}
+
+interface Destination {
+  label: string;
+  geeklistUrl: string;
+}
 
 interface ForTradeItem {
   id: string;
@@ -71,10 +85,35 @@ export default function ForTradeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ForTradeResponse | null>(null);
   const [reviewItem, setReviewItem] = useState<VfmPostItem | null>(null);
+  const [trackedAuctions, setTrackedAuctions] = useState<TrackedAuction[]>([]);
+  const [selectedDestIndex, setSelectedDestIndex] = useState(0);
+  const [showDestPicker, setShowDestPicker] = useState(false);
+
   const listId = useMemo(
     () => extractListId(bggSettings.geeklistUrl),
     [bggSettings.geeklistUrl],
   );
+
+  // Build destination list: VFM first, then tracked auctions
+  const destinations = useMemo<Destination[]>(() => {
+    const vfm: Destination = { label: "VFM", geeklistUrl: bggSettings.geeklistUrl };
+    const auctions = trackedAuctions.map((a) => ({
+      label: a.title || `Auction ${a.listId}`,
+      geeklistUrl: `https://boardgamegeek.com/geeklist/${a.listId}`,
+    }));
+    return [vfm, ...auctions];
+  }, [bggSettings.geeklistUrl, trackedAuctions]);
+
+  const selectedDest = destinations[Math.min(selectedDestIndex, destinations.length - 1)];
+
+  // Load tracked auctions from AsyncStorage
+  useEffect(() => {
+    AsyncStorage.getItem(TRACKED_AUCTIONS_KEY)
+      .then((raw) => {
+        if (raw) setTrackedAuctions(JSON.parse(raw) as TrackedAuction[]);
+      })
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(
     async (refresh: boolean) => {
@@ -151,6 +190,85 @@ export default function ForTradeScreen() {
                 <Text style={[styles.pageSubtitle, { color: colors.mutedForeground }]}>
                   {data ? `${data.totalForTrade} games marked for trade` : bggSettings.username}
                 </Text>
+
+                {/* Destination picker */}
+                <View style={styles.destRow}>
+                  <Text style={[styles.destLabel, { color: colors.mutedForeground }]}>
+                    Post to:
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.destBtn,
+                      { backgroundColor: colors.card, borderColor: colors.border },
+                    ]}
+                    onPress={() => setShowDestPicker((v) => !v)}
+                    activeOpacity={0.75}
+                  >
+                    <Text
+                      style={[styles.destBtnText, { color: colors.foreground }]}
+                      numberOfLines={1}
+                    >
+                      {selectedDest.label}
+                    </Text>
+                    <Feather
+                      name={showDestPicker ? "chevron-up" : "chevron-down"}
+                      size={16}
+                      color={colors.mutedForeground}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {showDestPicker && (
+                  <View
+                    style={[
+                      styles.destDropdown,
+                      { backgroundColor: colors.card, borderColor: colors.border },
+                    ]}
+                  >
+                    <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                      {destinations.map((dest, idx) => (
+                        <TouchableOpacity
+                          key={dest.geeklistUrl}
+                          style={[
+                            styles.destOption,
+                            idx < destinations.length - 1 && {
+                              borderBottomWidth: 1,
+                              borderBottomColor: colors.border,
+                            },
+                          ]}
+                          onPress={() => {
+                            setSelectedDestIndex(idx);
+                            setShowDestPicker(false);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.destOptionText,
+                              {
+                                color:
+                                  selectedDestIndex === idx
+                                    ? colors.accent
+                                    : colors.foreground,
+                                fontFamily:
+                                  selectedDestIndex === idx
+                                    ? "Inter_600SemiBold"
+                                    : "Inter_400Regular",
+                              },
+                            ]}
+                            numberOfLines={2}
+                          >
+                            {dest.label}
+                          </Text>
+                          {selectedDestIndex === idx && (
+                            <Feather name="check" size={16} color={colors.accent} />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
                 <TouchableOpacity
                   style={[styles.refreshBtn, { backgroundColor: colors.primary }]}
                   onPress={() => load(true)}
@@ -225,7 +343,7 @@ export default function ForTradeScreen() {
                         >
                           <Feather name="send" size={13} color={colors.primaryForeground} />
                           <Text style={[styles.postBtnText, { color: colors.primaryForeground }]}>
-                            Add to VFM
+                            Add
                           </Text>
                         </TouchableOpacity>
                       ) : null}
@@ -268,7 +386,8 @@ export default function ForTradeScreen() {
       <AddToVfmReviewModal
         visible={reviewItem != null}
         item={reviewItem}
-        geeklistUrl={bggSettings.geeklistUrl}
+        geeklistUrl={selectedDest.geeklistUrl}
+        destinationLabel={selectedDest.label}
         onClose={() => setReviewItem(null)}
       />
     </>
@@ -293,8 +412,53 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_400Regular",
   },
+  destRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 4,
+  },
+  destLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    flexShrink: 0,
+  },
+  destBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 6,
+  },
+  destBtnText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+  },
+  destDropdown: {
+    borderWidth: 1,
+    borderRadius: 10,
+    maxHeight: 200,
+    overflow: "hidden",
+  },
+  destOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  destOptionText: {
+    flex: 1,
+    fontSize: 14,
+  },
   refreshBtn: {
-    marginTop: 6,
+    marginTop: 2,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,

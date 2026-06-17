@@ -31,6 +31,7 @@ interface AddToVfmReviewModalProps {
   visible: boolean;
   item: VfmPostItem | null;
   geeklistUrl: string;
+  destinationLabel?: string;
   onClose: () => void;
 }
 
@@ -43,6 +44,7 @@ export function AddToVfmReviewModal({
   visible,
   item,
   geeklistUrl,
+  destinationLabel,
   onClose,
 }: AddToVfmReviewModalProps) {
   const colors = useColors();
@@ -130,6 +132,8 @@ export function AddToVfmReviewModal({
     Number.isFinite(binNum) &&
     binNum > 0;
 
+  const headerTitle = destinationLabel ? `Post to ${destinationLabel}` : "Post to VFM";
+
   return (
     <Modal
       visible={visible}
@@ -153,8 +157,8 @@ export function AddToVfmReviewModal({
           <TouchableOpacity onPress={onClose} hitSlop={8}>
             <Feather name="x" size={22} color={colors.foreground} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-            Post to VFM
+          <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
+            {headerTitle}
           </Text>
           <TouchableOpacity onPress={handlePost} disabled={!isValid} hitSlop={8}>
             <Text
@@ -312,6 +316,9 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontFamily: "Inter_600SemiBold",
+    flex: 1,
+    textAlign: "center",
+    marginHorizontal: 8,
   },
   postBtnText: {
     fontSize: 16,
