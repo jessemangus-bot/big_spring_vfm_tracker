@@ -1262,7 +1262,9 @@ router.get("/bgg/marketplace-prices", async (req, res) => {
     const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
     // Round SB to nearest $0.50
     const suggestedSb = Math.round(lowestListedPrice * 0.75 * 2) / 2;
-    const suggestedBin = avgPrice;
+    // Round BIN up to nearest $1, or nearest $10 if over $100
+    const binInterval = avgPrice > 100 ? 10 : 1;
+    const suggestedBin = Math.ceil(avgPrice / binInterval) * binInterval;
 
     res.json({
       objectId,
