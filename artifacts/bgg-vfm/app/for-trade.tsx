@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppFooter } from "@/components/AppFooter";
+import { AddToVfmReviewModal, VfmPostItem } from "@/components/AddToVfmReviewModal";
 import { useVFM } from "@/context/VFMContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -48,29 +49,16 @@ function extractBggImageId(item: ForTradeItem): string | null {
   return match ? match[1] : null;
 }
 
-function buildVfmPostUrl(geeklistUrl: string, item: ForTradeItem): string | null {
-  const listId = extractListId(geeklistUrl);
-  if (!listId || !item.objectId) return null;
-  const body = [
-    `[B]Version:[/B] ${item.version ?? ""}`,
-    `[B]Language:[/B] ${item.language ?? ""}`,
-    `[B]Condition:[/B] ${item.tradeCondition ?? ""}`,
-    "",
-    "[B]FP:[/B] $",
-  ].join("\n");
-
-  const url = new URL(`https://boardgamegeek.com/geeklist/${listId}`);
-  url.searchParams.set("addListitem", "1");
-  url.searchParams.set("addListitemType", "things");
-  url.searchParams.set("addListitemId", item.objectId);
-  url.searchParams.set("addListitemBody", body);
-
-  const imageId = extractBggImageId(item);
-  if (imageId) {
-    url.searchParams.set("addListitemImageid", imageId);
-  }
-
-  return url.toString();
+function itemToVfmPostItem(item: ForTradeItem): VfmPostItem | null {
+  if (!item.objectId) return null;
+  return {
+    objectId: item.objectId,
+    gameTitle: item.gameTitle,
+    version: item.version,
+    language: item.language,
+    tradeCondition: item.tradeCondition,
+    imageId: extractBggImageId(item) ?? undefined,
+  };
 }
 
 export default function ForTradeScreen() {
@@ -82,6 +70,7 @@ export default function ForTradeScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ForTradeResponse | null>(null);
+  const [reviewItem, setReviewItem] = useState<VfmPostItem | null>(null);
   const listId = useMemo(
     () => extractListId(bggSettings.geeklistUrl),
     [bggSettings.geeklistUrl],
@@ -185,7 +174,7 @@ export default function ForTradeScreen() {
               </View>
             }
             renderItem={({ item }) => {
-              const postUrl = buildVfmPostUrl(bggSettings.geeklistUrl, item);
+              const postItem = itemToVfmPostItem(item);
 
               return (
                 <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -228,12 +217,10 @@ export default function ForTradeScreen() {
                       ) : null}
                     </View>
                     <View style={styles.actionRow}>
-                      {postUrl ? (
+                      {postItem ? (
                         <TouchableOpacity
                           style={[styles.postBtn, { backgroundColor: colors.primary }]}
-                          onPress={() => {
-                            Linking.openURL(postUrl).catch(() => {});
-                          }}
+                          onPress={() => setReviewItem(postItem)}
                           activeOpacity={0.75}
                         >
                           <Feather name="send" size={13} color={colors.primaryForeground} />
@@ -278,6 +265,12 @@ export default function ForTradeScreen() {
           />
         )}
       </View>
+      <AddToVfmReviewModal
+        visible={reviewItem != null}
+        item={reviewItem}
+        geeklistUrl={bggSettings.geeklistUrl}
+        onClose={() => setReviewItem(null)}
+      />
     </>
   );
 }

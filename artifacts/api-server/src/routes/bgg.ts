@@ -5,6 +5,7 @@ const router: IRouter = Router();
 
 const BGG_API_BASE = "https://boardgamegeek.com/xmlapi/geeklist";
 const BGG_COLLECTION_API_BASE = "https://boardgamegeek.com/xmlapi2/collection";
+const BGG_THING_API_BASE = "https://boardgamegeek.com/xmlapi2/thing";
 const BGG_API_TOKEN_ENV_VAR = "BGG_API_TOKEN";
 const RETRY_DELAY_MS = 3000;
 const RETRY_DELAY_SECONDS = Math.ceil(RETRY_DELAY_MS / 1000);
@@ -1201,6 +1202,80 @@ router.get("/bgg/for-trade", async (req, res) => {
     res
       .status(502)
       .json({ error: err.message ?? "Failed to fetch for-trade collection" });
+  }
+});
+
+router.get("/bgg/marketplace-prices", async (req, res) => {
+  const { objectId } = req.query as Record<string, string>;
+
+  if (!objectId) {
+    res.status(400).json({ error: "objectId is required" });
+    return;
+  }
+
+  const apiToken = process.env[BGG_API_TOKEN_ENV_VAR]?.trim();
+  if (!apiToken) {
+    req.log.error(
+      { envVar: BGG_API_TOKEN_ENV_VAR },
+      "Missing required BGG API token configuration",
+    );
+    res.status(500).json({
+      error: `Server is missing ${BGG_API_TOKEN_ENV_VAR} configuration`,
+    });
+    return;
+  }
+
+  try {
+    const xml = await fetchBggXmlText(
+      `${BGG_THING_API_BASE}?id=${encodeURIComponent(objectId)}&marketplace=1`,
+      apiToken,
+      "BGG marketplace",
+      "BGG thing API",
+      BGG_FETCH_TIMEOUT_MS,
+    );
+
+    const parser = createBggXmlParser(["item", "listing"]);
+    const parsed = parser.parse(xml);
+    const rawItem = asArray(parsed.items?.item ?? parsed.item)[0];
+
+    if (!rawItem) {
+      res.json({ objectId, listedCount: 0, lowestListedPrice: null, suggestedSb: null, suggestedBin: null });
+      return;
+    }
+
+    const listings = asArray(rawItem.marketplace?.listing ?? []);
+    const prices = listings
+      .map((l: any) => parseFloat(l.price?.["@_value"]))
+      .filter((p: number) => Number.isFinite(p) && p > 0);
+
+    if (prices.length === 0) {
+      res.json({ objectId, listedCount: 0, lowestListedPrice: null, suggestedSb: null, suggestedBin: null });
+      return;
+    }
+
+    const lowestListedPrice = Math.min(...prices);
+    // Round SB to nearest $0.50
+    const suggestedSb = Math.round(lowestListedPrice * 0.75 * 2) / 2;
+    const suggestedBin = lowestListedPrice;
+
+    res.json({
+      objectId,
+      listedCount: prices.length,
+      lowestListedPrice,
+      suggestedSb,
+      suggestedBin,
+    });
+  } catch (err: any) {
+    if (err instanceof BggProcessingError) {
+      res.status(202).set("Retry-After", String(err.retryAfterSeconds)).json({
+        error: err.message,
+        retryAfterSeconds: err.retryAfterSeconds,
+      });
+      return;
+    }
+
+    req.log.error({ err }, "BGG marketplace price fetch failed");
+    res.status(502).json({ error: err.message ?? "Failed to fetch marketplace prices" });
   }
 });
 
