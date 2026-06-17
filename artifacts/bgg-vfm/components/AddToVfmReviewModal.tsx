@@ -8,6 +8,7 @@ import {
   Modal,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -93,33 +94,34 @@ export function AddToVfmReviewModal({
       .finally(() => setIsLoadingPrices(false));
   }, [visible, item?.objectId]);
 
+  const buildPostBody = () => {
+    const sb = parseFloat(sbPrice);
+    const bin = parseFloat(binPrice);
+    return [
+      `[B]Version:[/B] ${item?.version ?? ""}`,
+      `[B]Language:[/B] ${item?.language ?? ""}`,
+      `[B]Condition:[/B] ${item?.tradeCondition ?? ""}`,
+      "",
+      `[B]SB:[/B] $${Number.isFinite(sb) ? sb.toFixed(2) : ""}`,
+      `[B]BIN:[/B] $${Number.isFinite(bin) ? bin.toFixed(2) : ""}`,
+    ].join("\n");
+  };
+
+  const handleCopy = async () => {
+    await Share.share({ message: buildPostBody() }).catch(() => {});
+  };
+
   const handlePost = () => {
     if (!item) return;
     const listId = extractListId(geeklistUrl);
     if (!listId || !item.objectId) return;
 
-    const sb = parseFloat(sbPrice);
-    const bin = parseFloat(binPrice);
+    // Copy post body to clipboard first so user can paste into the BGG form
+    Share.share({ message: buildPostBody() }).catch(() => {});
 
-    const body = [
-      `[B]Version:[/B] ${item.version ?? ""}`,
-      `[B]Language:[/B] ${item.language ?? ""}`,
-      `[B]Condition:[/B] ${item.tradeCondition ?? ""}`,
-      "",
-      `[B]SB:[/B] $${Number.isFinite(sb) ? sb.toFixed(2) : ""}`,
-      `[B]BIN:[/B] $${Number.isFinite(bin) ? bin.toFixed(2) : ""}`,
-    ].join("\n");
-
-    const url = new URL(`https://boardgamegeek.com/geeklist/${listId}`);
-    url.searchParams.set("addListitem", "1");
-    url.searchParams.set("addListitemType", "things");
-    url.searchParams.set("addListitemId", item.objectId);
-    url.searchParams.set("addListitemBody", body);
-    if (item.imageId) {
-      url.searchParams.set("addListitemImageid", item.imageId);
-    }
-
-    Linking.openURL(url.toString()).catch(() => {});
+    // Open the geeklist's add-item page on BGG
+    const url = `https://boardgamegeek.com/geeklist/${listId}`;
+    Linking.openURL(url).catch(() => {});
     onClose();
   };
 
@@ -274,22 +276,30 @@ export function AddToVfmReviewModal({
                   { backgroundColor: colors.card, borderColor: colors.border },
                 ]}
               >
-                <Text style={[styles.previewLabel, { color: colors.mutedForeground }]}>
-                  POST PREVIEW
-                </Text>
-                <Text style={[styles.previewText, { color: colors.foreground }]}>
-                  {[
-                    `Version: ${item.version ?? ""}`,
-                    `Condition: ${item.tradeCondition ?? ""}`,
-                    `SB: $${sbPrice || "?"}`,
-                    `BIN: $${binPrice || "?"}`,
-                  ].join("\n")}
+                <View style={styles.previewHeader}>
+                  <Text style={[styles.previewLabel, { color: colors.mutedForeground }]}>
+                    POST BODY
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.copyBtn, { borderColor: colors.border }]}
+                    onPress={handleCopy}
+                    hitSlop={8}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="copy" size={13} color={colors.mutedForeground} />
+                    <Text style={[styles.copyBtnText, { color: colors.mutedForeground }]}>
+                      Copy
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Text selectable style={[styles.previewText, { color: colors.foreground }]}>
+                  {buildPostBody()}
                 </Text>
               </View>
 
               <Text style={[styles.footerNote, { color: colors.mutedForeground }]}>
-                Tapping "Post" opens the BGG geeklist with these details pre-filled.
-                Review and confirm on BGG before submitting.
+                Tapping "Post" copies these details and opens the BGG geeklist.
+                Click "+ Add Item", then paste into the body field.
               </Text>
             </>
           ) : null}
@@ -394,10 +404,28 @@ const styles = StyleSheet.create({
     marginTop: 24,
     gap: 8,
   },
+  previewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   previewLabel: {
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
     letterSpacing: 0.8,
+  },
+  copyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  copyBtnText: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
   },
   previewText: {
     fontSize: 13,
