@@ -246,7 +246,7 @@ export function AddToVfmReviewModal({
               />
 
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-                BIN ($) — lowest current listing
+                BIN ($) — average current listing
               </Text>
               <TextInput
                 style={[
