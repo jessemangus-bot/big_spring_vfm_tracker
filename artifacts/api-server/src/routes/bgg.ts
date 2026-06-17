@@ -1213,47 +1213,38 @@ router.get("/bgg/marketplace-prices", async (req, res) => {
     return;
   }
 
-  const apiToken = process.env[BGG_API_TOKEN_ENV_VAR]?.trim();
-  if (!apiToken) {
-    req.log.error(
-      { envVar: BGG_API_TOKEN_ENV_VAR },
-      "Missing required BGG API token configuration",
-    );
-    res.status(500).json({
-      error: `Server is missing ${BGG_API_TOKEN_ENV_VAR} configuration`,
-    });
-    return;
-  }
-
   try {
-    const xml = await fetchBggXmlText(
-      `${BGG_THING_API_BASE}?id=${encodeURIComponent(objectId)}&marketplace=1`,
-      apiToken,
-      "BGG marketplace",
-      "BGG thing API",
-      BGG_FETCH_TIMEOUT_MS,
-    );
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BGG_FETCH_TIMEOUT_MS);
 
-    const parser = createBggXmlParser(["item", "listing"]);
-    const parsed = parser.parse(xml);
-    const rawItem = asArray(parsed.items?.item ?? parsed.item)[0];
-
-    if (!rawItem) {
-      res.json({ objectId, listedCount: 0, lowestListedPrice: null, suggestedSb: null, suggestedBin: null });
-      return;
+    let data: any;
+    try {
+      const resp = await fetch(
+        `https://api.geekdo.com/api/geekmarket/products?objectid=${encodeURIComponent(objectId)}&objecttype=thing&nosession=1&pageid=1&sortby=price`,
+        {
+          signal: controller.signal,
+          headers: { Accept: "application/json" },
+        },
+      );
+      if (!resp.ok) {
+        res.json({ objectId, listedCount: 0, lowestListedPrice: null, suggestedSb: null, suggestedBin: null });
+        return;
+      }
+      data = await resp.json();
+    } finally {
+      clearTimeout(timeout);
     }
 
-    const listings = asArray(
-      rawItem.marketplacelistings?.listing ??
-      rawItem.marketplace?.listing ??
-      [],
-    );
-    const prices = listings
-      .map((l: any) => parseFloat(l.price?.["@_value"]))
+    const products: any[] = data?.products ?? [];
+    const prices = products
+      .map((p: any) => {
+        const raw = p.price?.value ?? p.price;
+        return typeof raw === "number" ? raw : parseFloat(raw);
+      })
       .filter((p: number) => Number.isFinite(p) && p > 0);
 
     if (prices.length === 0) {
-      res.json({ objectId, listedCount: 0, lowestListedPrice: null, suggestedSb: null, suggestedBin: null });
+      res.json({ objectId, listedCount: products.length, lowestListedPrice: null, suggestedSb: null, suggestedBin: null });
       return;
     }
 
@@ -1270,14 +1261,6 @@ router.get("/bgg/marketplace-prices", async (req, res) => {
       suggestedBin,
     });
   } catch (err: any) {
-    if (err instanceof BggProcessingError) {
-      res.status(202).set("Retry-After", String(err.retryAfterSeconds)).json({
-        error: err.message,
-        retryAfterSeconds: err.retryAfterSeconds,
-      });
-      return;
-    }
-
     req.log.error({ err }, "BGG marketplace price fetch failed");
     res.status(502).json({ error: err.message ?? "Failed to fetch marketplace prices" });
   }
