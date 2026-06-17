@@ -327,15 +327,18 @@ function parsePriceFromComment(text: unknown): number {
 }
 
 function parseBidAmount(text: unknown): number {
-  // Match bid-related dollar amounts: "bid $15", "I'll bid $15", "$15", etc.
-  const bidPattern = /bid(?:ding)?\s+\$?\s*([\d.]+)/i;
-  const dollarPattern = /\$\s*([\d.]+)/;
-  const bareAmountPattern = /^\s*(\d+(?:\.\d{1,2})?)\s*$/;
   const normalized = stripStruckThroughText(asText(text));
+  // Explicit bid keyword: "bid $15", "bidding 20", etc.
+  const bidPattern = /bid(?:ding)?\s+\$?\s*([\d.]+)/i;
+  // Dollar sign: "$15"
+  const dollarPattern = /\$\s*([\d.]+)/;
+  // Any bare number that is NOT exactly 5 digits (5-digit = ZIP code).
+  // Decimals matched first, then 1–4 digit integers, then 6+ digit integers.
+  const bareNumberPattern = /\b(\d+\.\d{1,2}|\d{1,4}|\d{6,})\b/;
   const m =
     normalized.match(bidPattern) ??
     normalized.match(dollarPattern) ??
-    normalized.match(bareAmountPattern);
+    normalized.match(bareNumberPattern);
   return m ? parseFloat(m[1]) : 0;
 }
 
