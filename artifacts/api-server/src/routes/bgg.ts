@@ -1213,38 +1213,48 @@ router.get("/bgg/marketplace-prices", async (req, res) => {
     return;
   }
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), BGG_FETCH_TIMEOUT_MS);
+  const apiToken = process.env[BGG_API_TOKEN_ENV_VAR]?.trim();
+  if (!apiToken) {
+    req.log.error(
+      { envVar: BGG_API_TOKEN_ENV_VAR },
+      "Missing required BGG API token configuration",
+    );
+    res.status(500).json({
+      error: `Server is missing ${BGG_API_TOKEN_ENV_VAR} configuration`,
+    });
+    return;
+  }
 
-    let data: any;
-    try {
-      const resp = await fetch(
-        `https://api.geekdo.com/api/geekmarket/products?objectid=${encodeURIComponent(objectId)}&objecttype=thing&nosession=1&pageid=1&sortby=price`,
-        {
-          signal: controller.signal,
-          headers: { Accept: "application/json" },
-        },
-      );
-      if (!resp.ok) {
-        res.json({ objectId, listedCount: 0, lowestListedPrice: null, suggestedSb: null, suggestedBin: null });
-        return;
-      }
-      data = await resp.json();
-    } finally {
-      clearTimeout(timeout);
+  try {
+    const xml = await fetchBggXmlText(
+      `${BGG_THING_API_BASE}?id=${encodeURIComponent(objectId)}&marketplace=1`,
+      apiToken,
+      "BGG marketplace",
+      "BGG thing API",
+      BGG_FETCH_TIMEOUT_MS,
+    );
+
+    const parser = createBggXmlParser(["item", "listing"]);
+    const parsed = parser.parse(xml);
+
+    // xmlapi2/thing wraps items in <items><item>
+    const rawItem = asArray(parsed.items?.item ?? []).concat(asArray(parsed.item ?? []))[0];
+
+    if (!rawItem) {
+      req.log.warn({ snippet: xml.slice(0, 300) }, "No item in BGG thing API response");
+      res.json({ objectId, listedCount: 0, lowestListedPrice: null, suggestedSb: null, suggestedBin: null });
+      return;
     }
 
-    const products: any[] = data?.products ?? [];
-    const prices = products
-      .map((p: any) => {
-        const raw = p.price?.value ?? p.price;
-        return typeof raw === "number" ? raw : parseFloat(raw);
-      })
+    const listings = asArray(rawItem.marketplacelistings?.listing ?? []);
+    req.log.info({ objectId, listingCount: listings.length }, "BGG marketplace listings parsed");
+
+    const prices = listings
+      .map((l: any) => parseFloat(l.price?.["@_value"]))
       .filter((p: number) => Number.isFinite(p) && p > 0);
 
     if (prices.length === 0) {
-      res.json({ objectId, listedCount: products.length, lowestListedPrice: null, suggestedSb: null, suggestedBin: null });
+      res.json({ objectId, listedCount: listings.length, lowestListedPrice: null, suggestedSb: null, suggestedBin: null });
       return;
     }
 
@@ -1261,6 +1271,13 @@ router.get("/bgg/marketplace-prices", async (req, res) => {
       suggestedBin,
     });
   } catch (err: any) {
+    if (err instanceof BggProcessingError) {
+      res.status(202).set("Retry-After", String(err.retryAfterSeconds)).json({
+        error: err.message,
+        retryAfterSeconds: err.retryAfterSeconds,
+      });
+      return;
+    }
     req.log.error({ err }, "BGG marketplace price fetch failed");
     res.status(502).json({ error: err.message ?? "Failed to fetch marketplace prices" });
   }
