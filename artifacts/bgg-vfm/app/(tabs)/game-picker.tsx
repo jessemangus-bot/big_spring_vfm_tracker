@@ -148,8 +148,10 @@ function filterGames(games: CollectionGame[], filters: ActiveFilters): Collectio
       if (filters.complexity === "heavy" && (game.weight < 3 || game.weight >= 4)) return false;
       if (filters.complexity === "veryheavy" && game.weight < 4) return false;
     }
-    if (filters.category !== null && !game.categories.includes(filters.category)) return false;
-    if (filters.mechanic !== null && !game.mechanics.includes(filters.mechanic)) return false;
+    // If enrichment data hasn't loaded for this game, pass it through rather
+    // than incorrectly excluding it (empty array ≠ "doesn't have this category").
+    if (filters.category !== null && game.categories.length > 0 && !game.categories.includes(filters.category)) return false;
+    if (filters.mechanic !== null && game.mechanics.length > 0 && !game.mechanics.includes(filters.mechanic)) return false;
     if (filters.playHistory === "played" && game.numplays === 0) return false;
     if (filters.playHistory === "unplayed" && game.numplays > 0) return false;
     if (filters.playHistory === "wanttoplay" && !game.wantToPlay) return false;
@@ -353,6 +355,9 @@ export default function GamePickerScreen() {
     return list.map((m) => ({ label: m, value: m }));
   }, [games]);
 
+  const enrichmentLoaded = games.length > 0 && games.some((g) => g.categories.length > 0 || g.mechanics.length > 0);
+  const enrichmentWarning = (filters.category !== null || filters.mechanic !== null) && !enrichmentLoaded;
+
   const handleGo = () => {
     const filtered = filterGames(games, filters);
     setMatchCount(filtered.length);
@@ -445,6 +450,14 @@ export default function GamePickerScreen() {
               value={playHistoryLabel(filters.playHistory)}
               onPress={() => setOpenPicker("playHistory")}
             />
+            {enrichmentWarning && (
+              <View style={[styles.enrichmentWarning, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                <Feather name="clock" size={13} color={colors.mutedForeground} />
+                <Text style={[styles.enrichmentWarningText, { color: colors.mutedForeground }]}>
+                  Game data is still loading — category/mechanic results may be incomplete.
+                </Text>
+              </View>
+            )}
 
             {result && (
               <View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -709,6 +722,22 @@ const styles = StyleSheet.create({
   bggLink: { paddingVertical: 4 },
   bggLinkText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   matchCount: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  enrichmentWarning: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  enrichmentWarningText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 17,
+  },
   expansionNote: {
     flexDirection: "row",
     alignItems: "flex-start",
