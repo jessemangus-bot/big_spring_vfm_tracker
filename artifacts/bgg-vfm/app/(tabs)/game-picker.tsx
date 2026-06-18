@@ -25,6 +25,9 @@ interface CollectionGame {
   thumbnail?: string;
   minPlayers?: number;
   maxPlayers?: number;
+  baseMinPlayers?: number;
+  baseMaxPlayers?: number;
+  expansionPlayerRanges: { name: string; min: number; max: number }[];
   playTime?: number;
   weight?: number;
   categories: string[];
@@ -416,6 +419,33 @@ export default function GamePickerScreen() {
                   </Text>
                 )}
 
+                {result.expansionPlayerRanges.length > 0 && (() => {
+                  const selectedPlayers = filters.players;
+                  const needsExpansion = selectedPlayers != null
+                    ? selectedPlayers < (result.baseMinPlayers ?? Infinity) ||
+                      selectedPlayers > (result.baseMaxPlayers ?? -Infinity)
+                    : false;
+                  if (!needsExpansion && result.baseMinPlayers != null && result.baseMaxPlayers != null) {
+                    // Always show if range is extended, even with no player filter
+                    const extendedMin = result.minPlayers ?? result.baseMinPlayers;
+                    const extendedMax = result.maxPlayers ?? result.baseMaxPlayers;
+                    if (extendedMin === result.baseMinPlayers && extendedMax === result.baseMaxPlayers) return null;
+                  }
+                  const names = result.expansionPlayerRanges.map((r) => r.name).join(", ");
+                  const base = result.baseMinPlayers != null && result.baseMaxPlayers != null
+                    ? `${result.baseMinPlayers}–${result.baseMaxPlayers}`
+                    : null;
+                  return (
+                    <View style={[styles.expansionNote, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                      <Feather name="info" size={13} color={colors.mutedForeground} />
+                      <Text style={[styles.expansionNoteText, { color: colors.mutedForeground }]}>
+                        {base ? `Base game supports ${base} players. ` : ""}
+                        {names} required for this player count.
+                      </Text>
+                    </View>
+                  );
+                })()}
+
                 <View style={styles.resultActions}>
                   <TouchableOpacity
                     style={[styles.rollAgainBtn, { backgroundColor: colors.primary }]}
@@ -606,6 +636,21 @@ const styles = StyleSheet.create({
   bggLink: { paddingVertical: 4 },
   bggLinkText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   matchCount: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  expansionNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+  },
+  expansionNoteText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 17,
+  },
   goBar: {
     position: "absolute",
     bottom: 0,
