@@ -348,24 +348,21 @@ export default function GamePickerScreen() {
   const { enrichment, status: enrichmentStatus, progress: enrichmentProgress } = useEnrichment(gameIds);
   const enrichmentLoaded = enrichmentStatus === "ready" || Object.keys(enrichment).length > 0;
 
-  // Cross-reference hardcoded BGG lists with enriched collection data.
-  // Fall back to the full hardcoded list until enrichment has any data.
+  // Once enrichment data is available, build options directly from the actual
+  // BGG values so they exactly match what the filter compares against.
+  // Fall back to the hardcoded lists only before any enrichment has loaded.
   const categoryOptions = useMemo(() => {
     const present = new Set<string>();
     Object.values(enrichment).forEach((e) => e.categories.forEach((c) => present.add(c)));
-    const list = present.size > 0
-      ? ALL_BGG_CATEGORIES.filter((c) => present.has(c))
-      : ALL_BGG_CATEGORIES;
-    return list.map((c) => ({ label: c, value: c }));
+    if (present.size > 0) return [...present].sort().map((c) => ({ label: c, value: c }));
+    return ALL_BGG_CATEGORIES.map((c) => ({ label: c, value: c }));
   }, [enrichment]);
 
   const mechanicOptions = useMemo(() => {
     const present = new Set<string>();
     Object.values(enrichment).forEach((e) => e.mechanics.forEach((m) => present.add(m)));
-    const list = present.size > 0
-      ? ALL_BGG_MECHANICS.filter((m) => present.has(m))
-      : ALL_BGG_MECHANICS;
-    return list.map((m) => ({ label: m, value: m }));
+    if (present.size > 0) return [...present].sort().map((m) => ({ label: m, value: m }));
+    return ALL_BGG_MECHANICS.map((m) => ({ label: m, value: m }));
   }, [enrichment]);
 
   const handleGo = () => {
