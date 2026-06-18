@@ -1328,16 +1328,22 @@ router.get("/bgg/my-collection", async (req, res) => {
       if (!objectId) continue;
       const stats = item.stats ?? {};
       const weightRaw = parseFloat(stats.rating?.averageweight?.["@_value"] ?? "0");
+      const minPlayers = parseInt(stats["@_minplayers"] ?? "0") || undefined;
+      const maxPlayers = parseInt(stats["@_maxplayers"] ?? "0") || undefined;
       collectionMap.set(objectId, {
         objectId,
         title: asText(item.name),
         thumbnail: asText(item.thumbnail) || undefined,
-        minPlayers: parseInt(stats["@_minplayers"] ?? "0") || undefined,
-        maxPlayers: parseInt(stats["@_maxplayers"] ?? "0") || undefined,
+        minPlayers,
+        maxPlayers,
+        // Preserved separately so the UI can warn when an expansion is required
+        baseMinPlayers: minPlayers,
+        baseMaxPlayers: maxPlayers,
         playTime: parseInt(stats["@_playingtime"] ?? "0") || undefined,
         weight: Number.isFinite(weightRaw) && weightRaw > 0 ? weightRaw : undefined,
         categories: [] as string[],
         mechanics: [] as string[],
+        expansionPlayerRanges: [] as { name: string; min: number; max: number }[],
       });
     }
 
@@ -1361,8 +1367,7 @@ router.get("/bgg/my-collection", async (req, res) => {
 
     // ── Batch-fetch thing data for base games + expansions ────────────────────
     const expansionIdSet = new Set(expansionObjectIds);
-    // Map of expansionObjectId → { minPlayers, maxPlayers, baseGameIds[] }
-    const expansionData = new Map<string, { min: number; max: number; baseIds: string[] }>();
+    const expansionData = new Map<string, { name: string; min: number; max: number; baseIds: string[] }>();
 
     const allIds = [...collectionMap.keys(), ...expansionObjectIds];
     const BATCH_SIZE = 100;
@@ -1384,15 +1389,20 @@ router.get("/bgg/my-collection", async (req, res) => {
           const links = asArray(thing.link ?? []);
 
           if (expansionIdSet.has(id)) {
-            // Expansion: record its player count + which base games it expands
+            // Expansion: record its name, player count, + which base games it expands
             const minP = parseInt(thing.minplayers?.["@_value"] ?? "0");
             const maxP = parseInt(thing.maxplayers?.["@_value"] ?? "0");
+            const primaryName = asArray(thing.name).find(
+              (n: any) => n?.["@_type"] === "primary",
+            );
+            const expName =
+              asText(primaryName?.["@_value"] ?? primaryName) || `Expansion ${id}`;
             const baseIds = links
               .filter((l: any) => l["@_type"] === "boardgameexpansion" && l["@_inbound"] === "true")
               .map((l: any) => String(l["@_id"] ?? ""))
               .filter(Boolean);
             if (minP > 0 && maxP > 0) {
-              expansionData.set(id, { min: minP, max: maxP, baseIds });
+              expansionData.set(id, { name: expName, min: minP, max: maxP, baseIds });
             }
           } else if (collectionMap.has(id)) {
             // Base game: extract categories + mechanics
@@ -1413,10 +1423,16 @@ router.get("/bgg/my-collection", async (req, res) => {
     }
 
     // ── Merge expansion player counts into base games ─────────────────────────
-    for (const { min, max, baseIds } of expansionData.values()) {
+    for (const { name, min, max, baseIds } of expansionData.values()) {
       for (const baseId of baseIds) {
         const game = collectionMap.get(baseId);
         if (!game) continue;
+        const widens =
+          (game.baseMinPlayers != null && min < game.baseMinPlayers) ||
+          (game.baseMaxPlayers != null && max > game.baseMaxPlayers);
+        if (widens) {
+          game.expansionPlayerRanges.push({ name, min, max });
+        }
         if (!game.minPlayers || min < game.minPlayers) game.minPlayers = min;
         if (!game.maxPlayers || max > game.maxPlayers) game.maxPlayers = max;
       }
