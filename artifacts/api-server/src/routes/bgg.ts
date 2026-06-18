@@ -1392,6 +1392,9 @@ router.get("/bgg/my-collection", async (req, res) => {
       const weightRaw = parseFloat(stats.rating?.averageweight?.["@_value"] ?? "0");
       const minPlayers = parseInt(stats["@_minplayers"] ?? "0") || undefined;
       const maxPlayers = parseInt(stats["@_maxplayers"] ?? "0") || undefined;
+      const numplays = parseInt(String(item.numplays ?? "0")) || 0;
+      const status = item.status ?? {};
+      const wantToPlay = String(status["@_wanttoplay"] ?? "0") === "1";
       collectionMap.set(objectId, {
         objectId,
         title: asText(item.name),
@@ -1403,6 +1406,8 @@ router.get("/bgg/my-collection", async (req, res) => {
         baseMaxPlayers: maxPlayers,
         playTime: parseInt(stats["@_playingtime"] ?? "0") || undefined,
         weight: Number.isFinite(weightRaw) && weightRaw > 0 ? weightRaw : undefined,
+        numplays,
+        wantToPlay,
         categories: [] as string[],
         mechanics: [] as string[],
         expansionPlayerRanges: [] as { name: string; min: number; max: number }[],

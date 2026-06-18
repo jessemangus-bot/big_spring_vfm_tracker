@@ -30,12 +30,15 @@ interface CollectionGame {
   expansionPlayerRanges: { name: string; min: number; max: number }[];
   playTime?: number;
   weight?: number;
+  numplays: number;
+  wantToPlay: boolean;
   categories: string[];
   mechanics: string[];
 }
 
 type PlayTimeFilter = "short" | "medium" | "long" | "verylong";
 type ComplexityFilter = "light" | "medium" | "heavy" | "veryheavy";
+type PlayHistoryFilter = "played" | "unplayed" | "wanttoplay";
 
 interface ActiveFilters {
   players: number | null;
@@ -43,6 +46,7 @@ interface ActiveFilters {
   complexity: ComplexityFilter | null;
   category: string | null;
   mechanic: string | null;
+  playHistory: PlayHistoryFilter | null;
 }
 
 const PLAY_TIME_OPTIONS: { label: string; value: PlayTimeFilter }[] = [
@@ -65,6 +69,16 @@ function playTimeLabel(v: PlayTimeFilter | null): string {
 
 function complexityLabel(v: ComplexityFilter | null): string {
   return COMPLEXITY_OPTIONS.find((o) => o.value === v)?.label ?? "Any";
+}
+
+const PLAY_HISTORY_OPTIONS: { label: string; value: PlayHistoryFilter }[] = [
+  { label: "Played before", value: "played" },
+  { label: "Never played", value: "unplayed" },
+  { label: "Want to play", value: "wanttoplay" },
+];
+
+function playHistoryLabel(v: PlayHistoryFilter | null): string {
+  return PLAY_HISTORY_OPTIONS.find((o) => o.value === v)?.label ?? "Any";
 }
 
 function filterGames(games: CollectionGame[], filters: ActiveFilters): CollectionGame[] {
@@ -94,6 +108,9 @@ function filterGames(games: CollectionGame[], filters: ActiveFilters): Collectio
     }
     if (filters.category !== null && !game.categories.includes(filters.category)) return false;
     if (filters.mechanic !== null && !game.mechanics.includes(filters.mechanic)) return false;
+    if (filters.playHistory === "played" && game.numplays === 0) return false;
+    if (filters.playHistory === "unplayed" && game.numplays > 0) return false;
+    if (filters.playHistory === "wanttoplay" && !game.wantToPlay) return false;
     return true;
   });
 }
@@ -225,6 +242,7 @@ export default function GamePickerScreen() {
     complexity: null,
     category: null,
     mechanic: null,
+    playHistory: null,
   });
 
   const [openPicker, setOpenPicker] = useState<keyof ActiveFilters | null>(null);
@@ -311,7 +329,7 @@ export default function GamePickerScreen() {
         {isFiltersActive && (
           <TouchableOpacity
             hitSlop={8}
-            onPress={() => setFilters({ players: null, playTime: null, complexity: null, category: null, mechanic: null })}
+            onPress={() => setFilters({ players: null, playTime: null, complexity: null, category: null, mechanic: null, playHistory: null })}
           >
             <Text style={[styles.clearBtn, { color: colors.accent }]}>Clear</Text>
           </TouchableOpacity>
@@ -369,6 +387,11 @@ export default function GamePickerScreen() {
               label="Mechanic"
               value={filters.mechanic ?? "Any"}
               onPress={() => setOpenPicker("mechanic")}
+            />
+            <FilterRow
+              label="Play History"
+              value={playHistoryLabel(filters.playHistory)}
+              onPress={() => setOpenPicker("playHistory")}
             />
 
             {result && (
@@ -533,6 +556,14 @@ export default function GamePickerScreen() {
         options={mechanicOptions}
         selected={filters.mechanic}
         onSelect={(v) => setFilters((f) => ({ ...f, mechanic: v as string | null }))}
+        onClose={() => setOpenPicker(null)}
+      />
+      <PickerModal
+        visible={openPicker === "playHistory"}
+        title="Play History"
+        options={PLAY_HISTORY_OPTIONS}
+        selected={filters.playHistory}
+        onSelect={(v) => setFilters((f) => ({ ...f, playHistory: v as PlayHistoryFilter | null }))}
         onClose={() => setOpenPicker(null)}
       />
     </View>
