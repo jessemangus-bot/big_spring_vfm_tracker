@@ -319,7 +319,7 @@ export default function GamePickerScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: 16 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]}
         keyboardShouldPersistTaps="handled"
       >
         {isLoading ? (
@@ -480,19 +480,19 @@ export default function GamePickerScreen() {
                 </Text>
               </View>
             )}
+
+            {/* GO button — inside ScrollView so native tab bar overlay can't cover it */}
+            {games.length > 0 && (
+              <View style={[styles.goBar, { borderTopColor: colors.border }]}>
+                <TouchableOpacity style={[styles.goBtn, { backgroundColor: colors.primary }]} onPress={handleGo} activeOpacity={0.85}>
+                  <MaterialCommunityIcons name="dice-6" size={22} color={colors.primaryForeground} />
+                  <Text style={[styles.goBtnText, { color: colors.primaryForeground }]}>GO</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </>
         )}
       </ScrollView>
-
-      {/* GO button */}
-      {!isLoading && !error && games.length > 0 && (
-        <View style={[styles.goBar, { paddingBottom: insets.bottom + 12, backgroundColor: colors.background, borderTopColor: colors.border }]}>
-          <TouchableOpacity style={[styles.goBtn, { backgroundColor: colors.primary }]} onPress={handleGo} activeOpacity={0.85}>
-            <MaterialCommunityIcons name="dice-6" size={22} color={colors.primaryForeground} />
-            <Text style={[styles.goBtnText, { color: colors.primaryForeground }]}>GO</Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {/* Pickers */}
       <PickerModal
