@@ -77,6 +77,48 @@ const PLAY_HISTORY_OPTIONS: { label: string; value: PlayHistoryFilter }[] = [
   { label: "Want to play", value: "wanttoplay" },
 ];
 
+// Full BGG category list — hardcoded so the picker is always populated
+const ALL_BGG_CATEGORIES = [
+  "Abstract Strategy", "Adventure", "Age of Reason", "American West", "Ancient",
+  "Animals", "Arabian", "Aviation / Flight", "Bluffing", "Card Game",
+  "Children's Game", "City Building", "Civil War", "Civilization", "Comic Book / Strip",
+  "Deduction", "Dice", "Economic", "Educational", "Exploration", "Fantasy",
+  "Farming", "Fighting", "Horror", "Humor", "Industry / Manufacturing",
+  "Math", "Mature / Adult", "Maze", "Medical", "Medieval", "Memory",
+  "Miniatures", "Modern Warfare", "Movies / TV / Radio theme", "Murder/Mystery",
+  "Mythology", "Nautical", "Negotiation", "Novel-based", "Party Game",
+  "Pirates", "Political", "Post-Napoleonic", "Prehistoric", "Puzzle",
+  "Racing", "Real-time", "Religious", "Renaissance", "Science Fiction",
+  "Space Exploration", "Spies/Secret Agents", "Sports", "Territory Building",
+  "Trains", "Transportation", "Travel", "Trivia", "Video Game Theme",
+  "Wargame", "Word Game", "World War I", "World War II", "Zombies",
+].sort();
+
+// Full BGG mechanic list — hardcoded so the picker is always populated
+const ALL_BGG_MECHANICS = [
+  "Action Points", "Action Queue", "Area Control / Area Influence", "Area Movement",
+  "Auction / Bidding", "Bag Building", "Betting / Wagering", "Bluffing",
+  "Campaign / Battle Card Driven", "Card Drafting", "Catch the Leader",
+  "Closed Drafting", "Commodity Speculation", "Communication Limits",
+  "Cooperative Game", "Deck Building", "Deduction", "Dice Rolling",
+  "Drafting", "Drawing", "Enclosure", "Hand Management", "Hexagon Grid",
+  "Hidden Roles", "Hidden Traitor", "Hidden Victory Points", "Income",
+  "Legacy Game", "Map Addition", "Matching", "Memory", "Modular Board",
+  "Movement Points", "Multi-Use Cards", "Narrative Choice / Paragraph",
+  "Network and Route Building", "Open Drafting", "Paper-and-Pencil",
+  "Pattern Building", "Pattern Recognition", "Pick-up and Deliver",
+  "Player Elimination", "Point to Point Movement", "Press Your Luck",
+  "Programmed Movement", "Race", "Random Production", "Real-Time",
+  "Role Playing", "Roll / Spin and Move", "Rondel", "Route/Network Building",
+  "Secret Unit Deployment", "Semi-Cooperative Game", "Set Collection",
+  "Simultaneous Action Selection", "Skill and Dexterity", "Stock Holding",
+  "Storytelling", "Take That", "Tech Trees / Tech Tracks", "Tile Placement",
+  "Time Track", "Trading", "Trick-taking", "Trivia", "Variable Phase Order",
+  "Variable Player Powers", "Variable Set-up", "Victory Points as a Resource",
+  "Voting", "Worker Placement", "Worker Placement with Dice Workers",
+  "Zone of Control",
+].sort();
+
 function playHistoryLabel(v: PlayHistoryFilter | null): string {
   return PLAY_HISTORY_OPTIONS.find((o) => o.value === v)?.label ?? "Any";
 }
@@ -289,16 +331,26 @@ export default function GamePickerScreen() {
     }));
   }, [games]);
 
+  // Use the hardcoded BGG list, cross-referenced with loaded games so only
+  // categories/mechanics present in the collection are shown.
+  // If thing data hasn't loaded yet, fall back to the full hardcoded list
+  // so the picker is never empty.
   const categoryOptions = useMemo(() => {
-    const set = new Set<string>();
-    games.forEach((g) => g.categories.forEach((c) => set.add(c)));
-    return [...set].sort().map((c) => ({ label: c, value: c }));
+    const present = new Set<string>();
+    games.forEach((g) => g.categories.forEach((c) => present.add(c)));
+    const list = present.size > 0
+      ? ALL_BGG_CATEGORIES.filter((c) => present.has(c))
+      : ALL_BGG_CATEGORIES;
+    return list.map((c) => ({ label: c, value: c }));
   }, [games]);
 
   const mechanicOptions = useMemo(() => {
-    const set = new Set<string>();
-    games.forEach((g) => g.mechanics.forEach((m) => set.add(m)));
-    return [...set].sort().map((m) => ({ label: m, value: m }));
+    const present = new Set<string>();
+    games.forEach((g) => g.mechanics.forEach((m) => present.add(m)));
+    const list = present.size > 0
+      ? ALL_BGG_MECHANICS.filter((m) => present.has(m))
+      : ALL_BGG_MECHANICS;
+    return list.map((m) => ({ label: m, value: m }));
   }, [games]);
 
   const handleGo = () => {
