@@ -148,10 +148,8 @@ function filterGames(games: CollectionGame[], filters: ActiveFilters): Collectio
       if (filters.complexity === "heavy" && (game.weight < 3 || game.weight >= 4)) return false;
       if (filters.complexity === "veryheavy" && game.weight < 4) return false;
     }
-    // If enrichment data hasn't loaded for this game, pass it through rather
-    // than incorrectly excluding it (empty array ≠ "doesn't have this category").
-    if (filters.category !== null && game.categories.length > 0 && !game.categories.includes(filters.category)) return false;
-    if (filters.mechanic !== null && game.mechanics.length > 0 && !game.mechanics.includes(filters.mechanic)) return false;
+    if (filters.category !== null && !game.categories.includes(filters.category)) return false;
+    if (filters.mechanic !== null && !game.mechanics.includes(filters.mechanic)) return false;
     if (filters.playHistory === "played" && game.numplays === 0) return false;
     if (filters.playHistory === "unplayed" && game.numplays > 0) return false;
     if (filters.playHistory === "wanttoplay" && !game.wantToPlay) return false;
@@ -234,19 +232,26 @@ interface FilterRowProps {
   label: string;
   value: string;
   onPress: () => void;
+  disabled?: boolean;
+  disabledHint?: string;
 }
 
-function FilterRow({ label, value, onPress }: FilterRowProps) {
+function FilterRow({ label, value, onPress, disabled, disabledHint }: FilterRowProps) {
   const colors = useColors();
   return (
     <TouchableOpacity
-      style={[filterRowStyles.row, { borderColor: colors.border, backgroundColor: colors.card }]}
-      onPress={onPress}
+      style={[filterRowStyles.row, { borderColor: colors.border, backgroundColor: colors.card }, disabled && { opacity: 0.45 }]}
+      onPress={disabled ? undefined : onPress}
       activeOpacity={0.7}
     >
-      <Text style={[filterRowStyles.label, { color: colors.mutedForeground }]}>{label}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={[filterRowStyles.label, { color: colors.mutedForeground }]}>{label}</Text>
+        {disabled && disabledHint && (
+          <Text style={[filterRowStyles.hint, { color: colors.mutedForeground }]}>{disabledHint}</Text>
+        )}
+      </View>
       <View style={filterRowStyles.right}>
-        <Text style={[filterRowStyles.value, { color: colors.foreground }]} numberOfLines={1}>{value}</Text>
+        <Text style={[filterRowStyles.value, { color: colors.foreground }]} numberOfLines={1}>{disabled ? "—" : value}</Text>
         <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
       </View>
     </TouchableOpacity>
@@ -265,6 +270,7 @@ const filterRowStyles = StyleSheet.create({
     marginBottom: 10,
   },
   label: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  hint: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
   right: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1, justifyContent: "flex-end" },
   value: { fontSize: 14, fontFamily: "Inter_400Regular", maxWidth: 180 },
 });
@@ -356,7 +362,6 @@ export default function GamePickerScreen() {
   }, [games]);
 
   const enrichmentLoaded = games.length > 0 && games.some((g) => g.categories.length > 0 || g.mechanics.length > 0);
-  const enrichmentWarning = (filters.category !== null || filters.mechanic !== null) && !enrichmentLoaded;
 
   const handleGo = () => {
     const filtered = filterGames(games, filters);
@@ -439,25 +444,21 @@ export default function GamePickerScreen() {
               label="Category"
               value={filters.category ?? "Any"}
               onPress={() => setOpenPicker("category")}
+              disabled={!enrichmentLoaded}
+              disabledHint="Loading game data…"
             />
             <FilterRow
               label="Mechanic"
               value={filters.mechanic ?? "Any"}
               onPress={() => setOpenPicker("mechanic")}
+              disabled={!enrichmentLoaded}
+              disabledHint="Loading game data…"
             />
             <FilterRow
               label="Play History"
               value={playHistoryLabel(filters.playHistory)}
               onPress={() => setOpenPicker("playHistory")}
             />
-            {enrichmentWarning && (
-              <View style={[styles.enrichmentWarning, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-                <Feather name="clock" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.enrichmentWarningText, { color: colors.mutedForeground }]}>
-                  Game data is still loading — category/mechanic results may be incomplete.
-                </Text>
-              </View>
-            )}
 
             {result && (
               <View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
