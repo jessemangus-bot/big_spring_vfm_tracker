@@ -605,14 +605,41 @@ function parseGeeklistXml(
       const type = parseType(body);
       const status = parseStatus(item, body);
       const buyer = parseBuyer(body);
+      const listedPrice = parsePrice(item, body);
+
+      // For auction listings, use the highest bid from comments as the price
+      // rather than the body's SB/BIN value.
+      let auctionPrice = 0;
+      let highBidder: string | undefined;
+      if (isAuctionItem(body)) {
+        // Group bids by bidder and take each bidder's maximum bid
+        const bidsByUser = new Map<string, number>();
+        for (const c of comments) {
+          if (c.username === usernameLower) continue;
+          const bid = parseBidAmount(c.text);
+          if (bid > 0) {
+            const prev = bidsByUser.get(c.username) ?? 0;
+            if (bid > prev) bidsByUser.set(c.username, bid);
+          }
+        }
+        for (const [bidder, bid] of bidsByUser) {
+          if (bid > auctionPrice) {
+            auctionPrice = bid;
+            highBidder = bidder;
+          }
+        }
+      }
+
+      const price = auctionPrice > 0 ? auctionPrice : listedPrice;
+      const buyerSeller = buyer ?? highBidder;
 
       items.push({
         id: String(item["@_id"] ?? Math.random()),
         gameTitle: objectname,
-        price: parsePrice(item, body),
+        price,
         type,
         status,
-        buyerSeller: buyer,
+        buyerSeller,
         condition: parseCondition(body),
       });
       continue;
