@@ -16,6 +16,40 @@ const COMMENT_CACHE_TTL_MS = 60 * 60 * 1000;
 const COMMENT_BACKGROUND_MAX_ATTEMPTS = 12;
 const BGG_XML_ENTITY_EXPANSION_LIMIT = 250_000;
 const BGG_XML_EXPANDED_LENGTH_LIMIT = 5 * 1024 * 1024;
+const THING_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const THING_BATCH_CONCURRENCY = 3; // max parallel BGG thing API requests
+
+interface ThingCacheEntry {
+  categories: string[];
+  mechanics: string[];
+  minPlayers?: number;
+  maxPlayers?: number;
+  primaryName?: string;
+  expansionBaseIds?: string[];
+  cachedAt: number;
+}
+
+const thingCache = new Map<string, ThingCacheEntry>();
+
+async function runWithConcurrencyLimit<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number,
+): Promise<PromiseSettledResult<T>[]> {
+  const results: PromiseSettledResult<T>[] = new Array(tasks.length);
+  let idx = 0;
+  async function worker() {
+    while (idx < tasks.length) {
+      const i = idx++;
+      try {
+        results[i] = { status: "fulfilled", value: await tasks[i]() };
+      } catch (reason) {
+        results[i] = { status: "rejected", reason };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
+  return results;
+}
 
 class BggProcessingError extends Error {
   retryAfterSeconds = RETRY_DELAY_SECONDS;
@@ -1393,70 +1427,99 @@ router.get("/bgg/my-collection", async (req, res) => {
       // Non-fatal — proceed without expansion player-count data
     }
 
-    // ── Batch-fetch thing data for base games + expansions ────────────────────
+    // ── Batch-fetch thing data for base games + expansions (with cache) ─────────
     const expansionIdSet = new Set(expansionObjectIds);
     const expansionData = new Map<string, { name: string; min: number; max: number; baseIds: string[] }>();
 
+    const now = Date.now();
     const allIds = [...collectionMap.keys(), ...expansionObjectIds];
-    const BATCH_SIZE = 50;
-    const batches: string[][] = [];
-    for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
-      batches.push(allIds.slice(i, i + BATCH_SIZE));
-    }
 
-    const batchResults = await Promise.allSettled(
-      batches.map((batch) =>
-        fetchBggXmlText(
+    // Separate IDs into cached vs. need-to-fetch
+    const cachedIds = allIds.filter((id) => {
+      const entry = thingCache.get(id);
+      return entry && now - entry.cachedAt < THING_CACHE_TTL_MS;
+    });
+    const uncachedIds = allIds.filter((id) => !cachedIds.includes(id));
+
+    req.log.info({ total: allIds.length, cached: cachedIds.length, uncached: uncachedIds.length }, "Thing data cache status");
+
+    // Fetch uncached IDs in batches with limited concurrency
+    if (uncachedIds.length > 0) {
+      const BATCH_SIZE = 50;
+      const batches: string[][] = [];
+      for (let i = 0; i < uncachedIds.length; i += BATCH_SIZE) {
+        batches.push(uncachedIds.slice(i, i + BATCH_SIZE));
+      }
+
+      const batchTasks = batches.map((batch, batchIdx) => async () => {
+        const xml = await fetchBggXmlText(
           `${BGG_THING_API_BASE}?id=${batch.join(",")}&type=boardgame,boardgameexpansion`,
           apiToken,
           "BGG thing",
           "BGG thing API",
           BGG_THING_BATCH_TIMEOUT_MS,
-        ),
-      ),
-    );
-
-    for (let i = 0; i < batchResults.length; i++) {
-      const result = batchResults[i];
-      if (result.status === "rejected") {
-        req.log.warn({ err: result.reason, batchStart: i * BATCH_SIZE }, "Thing API batch failed — skipping enrichment for batch");
-        continue;
-      }
-      const thingParsed = parser.parse(result.value);
-      const thingItems = asArray(thingParsed.items?.item ?? []);
-
-      for (const thing of thingItems) {
-        const id = String(thing["@_id"] ?? "");
-        const links = asArray(thing.link ?? []);
-
-        if (expansionIdSet.has(id)) {
-          // Expansion: record its name, player count, + which base games it expands
+        );
+        const thingParsed = parser.parse(xml);
+        const thingItems = asArray(thingParsed.items?.item ?? []);
+        for (const thing of thingItems) {
+          const id = String(thing["@_id"] ?? "");
+          const links = asArray(thing.link ?? []);
           const minP = parseInt(thing.minplayers?.["@_value"] ?? "0");
           const maxP = parseInt(thing.maxplayers?.["@_value"] ?? "0");
-          const primaryName = asArray(thing.name).find(
-            (n: any) => n?.["@_type"] === "primary",
-          );
-          const expName =
-            asText(primaryName?.["@_value"] ?? primaryName) || `Expansion ${id}`;
-          const baseIds = links
-            .filter((l: any) => l["@_type"] === "boardgameexpansion" && l["@_inbound"] === "true")
-            .map((l: any) => String(l["@_id"] ?? ""))
-            .filter(Boolean);
-          if (minP > 0 && maxP > 0) {
-            expansionData.set(id, { name: expName, min: minP, max: maxP, baseIds });
-          }
-        } else if (collectionMap.has(id)) {
-          // Base game: extract categories + mechanics
-          const game = collectionMap.get(id)!;
-          game.categories = links
+          const primaryName = asArray(thing.name).find((n: any) => n?.["@_type"] === "primary");
+          const primaryNameStr = asText(primaryName?.["@_value"] ?? primaryName) || undefined;
+          const categories = links
             .filter((l: any) => l["@_type"] === "boardgamecategory")
             .map((l: any) => String(l["@_value"] ?? ""))
             .filter(Boolean);
-          game.mechanics = links
+          const mechanics = links
             .filter((l: any) => l["@_type"] === "boardgamemechanic")
             .map((l: any) => String(l["@_value"] ?? ""))
             .filter(Boolean);
+          const expansionBaseIds = links
+            .filter((l: any) => l["@_type"] === "boardgameexpansion" && l["@_inbound"] === "true")
+            .map((l: any) => String(l["@_id"] ?? ""))
+            .filter(Boolean);
+          thingCache.set(id, {
+            categories,
+            mechanics,
+            minPlayers: minP > 0 ? minP : undefined,
+            maxPlayers: maxP > 0 ? maxP : undefined,
+            primaryName: primaryNameStr,
+            expansionBaseIds,
+            cachedAt: Date.now(),
+          });
         }
+        return batchIdx;
+      });
+
+      const batchResults = await runWithConcurrencyLimit(batchTasks, THING_BATCH_CONCURRENCY);
+      for (const result of batchResults) {
+        if (result.status === "rejected") {
+          req.log.warn({ err: result.reason }, "Thing API batch failed — skipping enrichment for batch");
+        }
+      }
+    }
+
+    // Apply cached data to collection map and expansion data
+    for (const id of allIds) {
+      const cached = thingCache.get(id);
+      if (!cached) continue;
+
+      if (expansionIdSet.has(id)) {
+        const { primaryName, minPlayers, maxPlayers, expansionBaseIds } = cached;
+        if (minPlayers && maxPlayers && expansionBaseIds) {
+          expansionData.set(id, {
+            name: primaryName ?? `Expansion ${id}`,
+            min: minPlayers,
+            max: maxPlayers,
+            baseIds: expansionBaseIds,
+          });
+        }
+      } else if (collectionMap.has(id)) {
+        const game = collectionMap.get(id)!;
+        game.categories = cached.categories;
+        game.mechanics = cached.mechanics;
       }
     }
 
