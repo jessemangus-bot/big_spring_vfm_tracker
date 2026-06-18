@@ -521,23 +521,13 @@ export default function GamePickerScreen() {
                   );
                 })()}
 
-                <View style={styles.resultActions}>
-                  <TouchableOpacity
-                    style={[styles.rollAgainBtn, { backgroundColor: colors.primary }]}
-                    onPress={handleRollAgain}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialCommunityIcons name="dice-6" size={18} color={colors.primaryForeground} />
-                    <Text style={[styles.rollAgainText, { color: colors.primaryForeground }]}>Roll Again</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.bggLink}
-                    onPress={() => Linking.openURL(`https://boardgamegeek.com/boardgame/${result.objectId}`).catch(() => {})}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.bggLinkText, { color: colors.accent }]}>View on BGG</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  style={styles.bggLink}
+                  onPress={() => Linking.openURL(`https://boardgamegeek.com/boardgame/${result.objectId}`).catch(() => {})}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.bggLinkText, { color: colors.accent }]}>View on BGG</Text>
+                </TouchableOpacity>
 
                 {matchCount !== null && (
                   <Text style={[styles.matchCount, { color: colors.mutedForeground }]}>
