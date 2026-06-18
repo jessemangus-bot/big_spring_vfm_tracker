@@ -18,8 +18,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useVFM } from "@/context/VFMContext";
 import { useColors } from "@/hooks/useColors";
-import { useEnrichment } from "@/hooks/useEnrichment";
-import type { EnrichmentMap } from "@/hooks/useEnrichment";
 
 interface CollectionGame {
   objectId: string;
@@ -34,19 +32,23 @@ interface CollectionGame {
   weight?: number;
   numplays: number;
   wantToPlay: boolean;
+  userRating?: number;
+  communityRating?: number;
 }
 
 type PlayTimeFilter = "short" | "medium" | "long" | "verylong";
 type ComplexityFilter = "light" | "medium" | "heavy" | "veryheavy";
 type PlayHistoryFilter = "played" | "unplayed" | "wanttoplay";
+type UserRatingFilter = "loved" | "liked" | "mixed" | "unrated";
+type CommunityRatingFilter = "top" | "great" | "good";
 
 interface ActiveFilters {
   players: number | null;
   playTime: PlayTimeFilter | null;
   complexity: ComplexityFilter | null;
-  category: string | null;
-  mechanic: string | null;
   playHistory: PlayHistoryFilter | null;
+  userRating: UserRatingFilter | null;
+  communityRating: CommunityRatingFilter | null;
 }
 
 const PLAY_TIME_OPTIONS: { label: string; value: PlayTimeFilter }[] = [
@@ -77,53 +79,32 @@ const PLAY_HISTORY_OPTIONS: { label: string; value: PlayHistoryFilter }[] = [
   { label: "Want to play", value: "wanttoplay" },
 ];
 
-// Full BGG category list — hardcoded so the picker is always populated
-const ALL_BGG_CATEGORIES = [
-  "Abstract Strategy", "Adventure", "Age of Reason", "American West", "Ancient",
-  "Animals", "Arabian", "Aviation / Flight", "Bluffing", "Card Game",
-  "Children's Game", "City Building", "Civil War", "Civilization", "Comic Book / Strip",
-  "Deduction", "Dice", "Economic", "Educational", "Exploration", "Fantasy",
-  "Farming", "Fighting", "Horror", "Humor", "Industry / Manufacturing",
-  "Math", "Mature / Adult", "Maze", "Medical", "Medieval", "Memory",
-  "Miniatures", "Modern Warfare", "Movies / TV / Radio theme", "Murder/Mystery",
-  "Mythology", "Nautical", "Negotiation", "Novel-based", "Party Game",
-  "Pirates", "Political", "Post-Napoleonic", "Prehistoric", "Puzzle",
-  "Racing", "Real-time", "Religious", "Renaissance", "Science Fiction",
-  "Space Exploration", "Spies/Secret Agents", "Sports", "Territory Building",
-  "Trains", "Transportation", "Travel", "Trivia", "Video Game Theme",
-  "Wargame", "Word Game", "World War I", "World War II", "Zombies",
-].sort();
+const USER_RATING_OPTIONS: { label: string; value: UserRatingFilter }[] = [
+  { label: "Loved (8–10)", value: "loved" },
+  { label: "Liked (6–7)", value: "liked" },
+  { label: "Mixed (1–5)", value: "mixed" },
+  { label: "Not rated", value: "unrated" },
+];
 
-// Full BGG mechanic list — hardcoded so the picker is always populated
-const ALL_BGG_MECHANICS = [
-  "Action Points", "Action Queue", "Area Control / Area Influence", "Area Movement",
-  "Auction / Bidding", "Bag Building", "Betting / Wagering", "Bluffing",
-  "Campaign / Battle Card Driven", "Card Drafting", "Catch the Leader",
-  "Closed Drafting", "Commodity Speculation", "Communication Limits",
-  "Cooperative Game", "Deck Building", "Deduction", "Dice Rolling",
-  "Drafting", "Drawing", "Enclosure", "Hand Management", "Hexagon Grid",
-  "Hidden Roles", "Hidden Traitor", "Hidden Victory Points", "Income",
-  "Legacy Game", "Map Addition", "Matching", "Memory", "Modular Board",
-  "Movement Points", "Multi-Use Cards", "Narrative Choice / Paragraph",
-  "Network and Route Building", "Open Drafting", "Paper-and-Pencil",
-  "Pattern Building", "Pattern Recognition", "Pick-up and Deliver",
-  "Player Elimination", "Point to Point Movement", "Press Your Luck",
-  "Programmed Movement", "Race", "Random Production", "Real-Time",
-  "Role Playing", "Roll / Spin and Move", "Rondel", "Route/Network Building",
-  "Secret Unit Deployment", "Semi-Cooperative Game", "Set Collection",
-  "Simultaneous Action Selection", "Skill and Dexterity", "Stock Holding",
-  "Storytelling", "Take That", "Tech Trees / Tech Tracks", "Tile Placement",
-  "Time Track", "Trading", "Trick-taking", "Trivia", "Variable Phase Order",
-  "Variable Player Powers", "Variable Set-up", "Victory Points as a Resource",
-  "Voting", "Worker Placement", "Worker Placement with Dice Workers",
-  "Zone of Control",
-].sort();
+const COMMUNITY_RATING_OPTIONS: { label: string; value: CommunityRatingFilter }[] = [
+  { label: "Top rated (≥ 8)", value: "top" },
+  { label: "Great (7–8)", value: "great" },
+  { label: "Good (6–7)", value: "good" },
+];
 
 function playHistoryLabel(v: PlayHistoryFilter | null): string {
   return PLAY_HISTORY_OPTIONS.find((o) => o.value === v)?.label ?? "Any";
 }
 
-function filterGames(games: CollectionGame[], filters: ActiveFilters, enrichment: EnrichmentMap): CollectionGame[] {
+function userRatingLabel(v: UserRatingFilter | null): string {
+  return USER_RATING_OPTIONS.find((o) => o.value === v)?.label ?? "Any";
+}
+
+function communityRatingLabel(v: CommunityRatingFilter | null): string {
+  return COMMUNITY_RATING_OPTIONS.find((o) => o.value === v)?.label ?? "Any";
+}
+
+function filterGames(games: CollectionGame[], filters: ActiveFilters): CollectionGame[] {
   return games.filter((game) => {
     if (filters.players !== null) {
       const p = filters.players;
@@ -148,16 +129,23 @@ function filterGames(games: CollectionGame[], filters: ActiveFilters, enrichment
       if (filters.complexity === "heavy" && (game.weight < 3 || game.weight >= 4)) return false;
       if (filters.complexity === "veryheavy" && game.weight < 4) return false;
     }
-    const gameEnrichment = enrichment[game.objectId];
-    if (filters.category !== null) {
-      if (!gameEnrichment || !gameEnrichment.categories.includes(filters.category)) return false;
-    }
-    if (filters.mechanic !== null) {
-      if (!gameEnrichment || !gameEnrichment.mechanics.includes(filters.mechanic)) return false;
-    }
     if (filters.playHistory === "played" && game.numplays === 0) return false;
     if (filters.playHistory === "unplayed" && game.numplays > 0) return false;
     if (filters.playHistory === "wanttoplay" && !game.wantToPlay) return false;
+    if (filters.userRating !== null) {
+      const r = game.userRating;
+      if (filters.userRating === "unrated" && r != null) return false;
+      if (filters.userRating === "loved" && (r == null || r < 8)) return false;
+      if (filters.userRating === "liked" && (r == null || r < 6 || r >= 8)) return false;
+      if (filters.userRating === "mixed" && (r == null || r >= 6)) return false;
+    }
+    if (filters.communityRating !== null) {
+      const r = game.communityRating;
+      if (r == null) return false;
+      if (filters.communityRating === "top" && r < 8) return false;
+      if (filters.communityRating === "great" && (r < 7 || r >= 8)) return false;
+      if (filters.communityRating === "good" && (r < 6 || r >= 7)) return false;
+    }
     return true;
   });
 }
@@ -295,9 +283,9 @@ export default function GamePickerScreen() {
     players: null,
     playTime: null,
     complexity: null,
-    category: null,
-    mechanic: null,
     playHistory: null,
+    userRating: null,
+    communityRating: null,
   });
 
   const [openPicker, setOpenPicker] = useState<keyof ActiveFilters | null>(null);
@@ -344,29 +332,8 @@ export default function GamePickerScreen() {
     }));
   }, [games]);
 
-  const gameIds = useMemo(() => games.map((g) => g.objectId), [games]);
-  const { enrichment, status: enrichmentStatus, progress: enrichmentProgress } = useEnrichment(gameIds);
-  const enrichmentLoaded = enrichmentStatus === "ready" || Object.keys(enrichment).length > 0;
-
-  // Once enrichment data is available, build options directly from the actual
-  // BGG values so they exactly match what the filter compares against.
-  // Fall back to the hardcoded lists only before any enrichment has loaded.
-  const categoryOptions = useMemo(() => {
-    const present = new Set<string>();
-    Object.values(enrichment).forEach((e) => e.categories.forEach((c) => present.add(c)));
-    if (present.size > 0) return [...present].sort().map((c) => ({ label: c, value: c }));
-    return ALL_BGG_CATEGORIES.map((c) => ({ label: c, value: c }));
-  }, [enrichment]);
-
-  const mechanicOptions = useMemo(() => {
-    const present = new Set<string>();
-    Object.values(enrichment).forEach((e) => e.mechanics.forEach((m) => present.add(m)));
-    if (present.size > 0) return [...present].sort().map((m) => ({ label: m, value: m }));
-    return ALL_BGG_MECHANICS.map((m) => ({ label: m, value: m }));
-  }, [enrichment]);
-
   const handleGo = () => {
-    const filtered = filterGames(games, filters, enrichment);
+    const filtered = filterGames(games, filters);
     setMatchCount(filtered.length);
     if (filtered.length === 0) {
       setResult(null);
@@ -377,7 +344,7 @@ export default function GamePickerScreen() {
   };
 
   const handleRollAgain = () => {
-    const filtered = filterGames(games, filters, enrichment);
+    const filtered = filterGames(games, filters);
     if (filtered.length === 0) { setResult(null); return; }
     const pick = filtered[Math.floor(Math.random() * filtered.length)];
     setResult(pick);
@@ -393,7 +360,7 @@ export default function GamePickerScreen() {
         {isFiltersActive && (
           <TouchableOpacity
             hitSlop={8}
-            onPress={() => setFilters({ players: null, playTime: null, complexity: null, category: null, mechanic: null, playHistory: null })}
+            onPress={() => setFilters({ players: null, playTime: null, complexity: null, playHistory: null, userRating: null, communityRating: null })}
           >
             <Text style={[styles.clearBtn, { color: colors.accent }]}>Clear</Text>
           </TouchableOpacity>
@@ -443,18 +410,14 @@ export default function GamePickerScreen() {
               onPress={() => setOpenPicker("complexity")}
             />
             <FilterRow
-              label="Category"
-              value={filters.category ?? "Any"}
-              onPress={() => setOpenPicker("category")}
-              disabled={!enrichmentLoaded}
-              disabledHint={enrichmentStatus === "loading" ? `Loading game data… ${Math.round(enrichmentProgress * 100)}%` : "Game data unavailable"}
+              label="Your Rating"
+              value={userRatingLabel(filters.userRating)}
+              onPress={() => setOpenPicker("userRating")}
             />
             <FilterRow
-              label="Mechanic"
-              value={filters.mechanic ?? "Any"}
-              onPress={() => setOpenPicker("mechanic")}
-              disabled={!enrichmentLoaded}
-              disabledHint={enrichmentStatus === "loading" ? `Loading game data… ${Math.round(enrichmentProgress * 100)}%` : "Game data unavailable"}
+              label="Community Rating"
+              value={communityRatingLabel(filters.communityRating)}
+              onPress={() => setOpenPicker("communityRating")}
             />
             <FilterRow
               label="Play History"
@@ -504,11 +467,6 @@ export default function GamePickerScreen() {
                   )}
                 </View>
 
-                {(enrichment[result.objectId]?.categories ?? []).length > 0 && (
-                  <Text style={[styles.resultCategories, { color: colors.mutedForeground }]}>
-                    {enrichment[result.objectId].categories.slice(0, 3).join(" · ")}
-                  </Text>
-                )}
 
                 {result.expansionPlayerRanges.length > 0 && (() => {
                   const selectedPlayers = filters.players;
@@ -601,19 +559,19 @@ export default function GamePickerScreen() {
         onClose={() => setOpenPicker(null)}
       />
       <PickerModal
-        visible={openPicker === "category"}
-        title="Category"
-        options={categoryOptions}
-        selected={filters.category}
-        onSelect={(v) => setFilters((f) => ({ ...f, category: v as string | null }))}
+        visible={openPicker === "userRating"}
+        title="Your Rating"
+        options={USER_RATING_OPTIONS}
+        selected={filters.userRating}
+        onSelect={(v) => setFilters((f) => ({ ...f, userRating: v as UserRatingFilter | null }))}
         onClose={() => setOpenPicker(null)}
       />
       <PickerModal
-        visible={openPicker === "mechanic"}
-        title="Mechanic"
-        options={mechanicOptions}
-        selected={filters.mechanic}
-        onSelect={(v) => setFilters((f) => ({ ...f, mechanic: v as string | null }))}
+        visible={openPicker === "communityRating"}
+        title="Community Rating"
+        options={COMMUNITY_RATING_OPTIONS}
+        selected={filters.communityRating}
+        onSelect={(v) => setFilters((f) => ({ ...f, communityRating: v as CommunityRatingFilter | null }))}
         onClose={() => setOpenPicker(null)}
       />
       <PickerModal
