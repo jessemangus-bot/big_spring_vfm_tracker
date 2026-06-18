@@ -297,6 +297,9 @@ function stripBBCode(text: string): string {
 function asText(value: unknown): string {
   if (typeof value === "string") return value;
   if (value == null) return "";
+  if (typeof value === "object" && "#text" in (value as object)) {
+    return String((value as any)["#text"]);
+  }
   return String(value);
 }
 
