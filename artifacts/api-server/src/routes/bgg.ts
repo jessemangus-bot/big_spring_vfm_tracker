@@ -331,10 +331,10 @@ function parseBidAmount(text: unknown): number {
   const normalized = stripStruckThroughText(asText(text));
   // Explicit bid keyword: "bid $15", "bidding 20", etc.
   const bidPattern = /bid(?:ding)?\s+\$?\s*([\d.]+)/i;
-  // Dollar sign: "$15"
-  const dollarPattern = /\$\s*([\d.]+)/;
+  // Dollar sign NOT preceded by a digit (avoids "7$ 49221" parsing as 49221).
+  // Also exclude 5-digit matches (ZIP codes).
+  const dollarPattern = /(?<!\d)\$\s*(\d+\.\d{1,2}|\d{1,4}|\d{6,})/;
   // Any bare number that is NOT exactly 5 digits (5-digit = ZIP code).
-  // Decimals matched first, then 1–4 digit integers, then 6+ digit integers.
   const bareNumberPattern = /\b(\d+\.\d{1,2}|\d{1,4}|\d{6,})\b/;
   const m =
     normalized.match(bidPattern) ??
