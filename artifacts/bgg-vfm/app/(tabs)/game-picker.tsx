@@ -319,7 +319,7 @@ export default function GamePickerScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: 16 }]}
         keyboardShouldPersistTaps="handled"
       >
         {isLoading ? (
@@ -652,10 +652,6 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   goBar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
     paddingHorizontal: 20,
     paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,

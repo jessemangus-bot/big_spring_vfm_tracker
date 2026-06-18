@@ -10,6 +10,7 @@ const BGG_API_TOKEN_ENV_VAR = "BGG_API_TOKEN";
 const RETRY_DELAY_MS = 3000;
 const RETRY_DELAY_SECONDS = Math.ceil(RETRY_DELAY_MS / 1000);
 const BGG_FETCH_TIMEOUT_MS = 5000;
+const BGG_THING_BATCH_TIMEOUT_MS = 30000;
 const BGG_COMMENT_FETCH_TIMEOUT_MS = 15000;
 const COMMENT_CACHE_TTL_MS = 60 * 60 * 1000;
 const COMMENT_BACKGROUND_MAX_ATTEMPTS = 12;
@@ -1397,55 +1398,65 @@ router.get("/bgg/my-collection", async (req, res) => {
     const expansionData = new Map<string, { name: string; min: number; max: number; baseIds: string[] }>();
 
     const allIds = [...collectionMap.keys(), ...expansionObjectIds];
-    const BATCH_SIZE = 100;
+    const BATCH_SIZE = 50;
+    const batches: string[][] = [];
     for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
-      const batch = allIds.slice(i, i + BATCH_SIZE);
-      try {
-        const thingXml = await fetchBggXmlText(
+      batches.push(allIds.slice(i, i + BATCH_SIZE));
+    }
+
+    const batchResults = await Promise.allSettled(
+      batches.map((batch) =>
+        fetchBggXmlText(
           `${BGG_THING_API_BASE}?id=${batch.join(",")}&type=boardgame,boardgameexpansion`,
           apiToken,
           "BGG thing",
           "BGG thing API",
-          BGG_FETCH_TIMEOUT_MS,
-        );
-        const thingParsed = parser.parse(thingXml);
-        const thingItems = asArray(thingParsed.items?.item ?? []);
+          BGG_THING_BATCH_TIMEOUT_MS,
+        ),
+      ),
+    );
 
-        for (const thing of thingItems) {
-          const id = String(thing["@_id"] ?? "");
-          const links = asArray(thing.link ?? []);
+    for (let i = 0; i < batchResults.length; i++) {
+      const result = batchResults[i];
+      if (result.status === "rejected") {
+        req.log.warn({ err: result.reason, batchStart: i * BATCH_SIZE }, "Thing API batch failed — skipping enrichment for batch");
+        continue;
+      }
+      const thingParsed = parser.parse(result.value);
+      const thingItems = asArray(thingParsed.items?.item ?? []);
 
-          if (expansionIdSet.has(id)) {
-            // Expansion: record its name, player count, + which base games it expands
-            const minP = parseInt(thing.minplayers?.["@_value"] ?? "0");
-            const maxP = parseInt(thing.maxplayers?.["@_value"] ?? "0");
-            const primaryName = asArray(thing.name).find(
-              (n: any) => n?.["@_type"] === "primary",
-            );
-            const expName =
-              asText(primaryName?.["@_value"] ?? primaryName) || `Expansion ${id}`;
-            const baseIds = links
-              .filter((l: any) => l["@_type"] === "boardgameexpansion" && l["@_inbound"] === "true")
-              .map((l: any) => String(l["@_id"] ?? ""))
-              .filter(Boolean);
-            if (minP > 0 && maxP > 0) {
-              expansionData.set(id, { name: expName, min: minP, max: maxP, baseIds });
-            }
-          } else if (collectionMap.has(id)) {
-            // Base game: extract categories + mechanics
-            const game = collectionMap.get(id)!;
-            game.categories = links
-              .filter((l: any) => l["@_type"] === "boardgamecategory")
-              .map((l: any) => String(l["@_value"] ?? ""))
-              .filter(Boolean);
-            game.mechanics = links
-              .filter((l: any) => l["@_type"] === "boardgamemechanic")
-              .map((l: any) => String(l["@_value"] ?? ""))
-              .filter(Boolean);
+      for (const thing of thingItems) {
+        const id = String(thing["@_id"] ?? "");
+        const links = asArray(thing.link ?? []);
+
+        if (expansionIdSet.has(id)) {
+          // Expansion: record its name, player count, + which base games it expands
+          const minP = parseInt(thing.minplayers?.["@_value"] ?? "0");
+          const maxP = parseInt(thing.maxplayers?.["@_value"] ?? "0");
+          const primaryName = asArray(thing.name).find(
+            (n: any) => n?.["@_type"] === "primary",
+          );
+          const expName =
+            asText(primaryName?.["@_value"] ?? primaryName) || `Expansion ${id}`;
+          const baseIds = links
+            .filter((l: any) => l["@_type"] === "boardgameexpansion" && l["@_inbound"] === "true")
+            .map((l: any) => String(l["@_id"] ?? ""))
+            .filter(Boolean);
+          if (minP > 0 && maxP > 0) {
+            expansionData.set(id, { name: expName, min: minP, max: maxP, baseIds });
           }
+        } else if (collectionMap.has(id)) {
+          // Base game: extract categories + mechanics
+          const game = collectionMap.get(id)!;
+          game.categories = links
+            .filter((l: any) => l["@_type"] === "boardgamecategory")
+            .map((l: any) => String(l["@_value"] ?? ""))
+            .filter(Boolean);
+          game.mechanics = links
+            .filter((l: any) => l["@_type"] === "boardgamemechanic")
+            .map((l: any) => String(l["@_value"] ?? ""))
+            .filter(Boolean);
         }
-      } catch (batchErr) {
-        req.log.warn({ batchErr, batchStart: i }, "Thing API batch failed — skipping enrichment for batch");
       }
     }
 
