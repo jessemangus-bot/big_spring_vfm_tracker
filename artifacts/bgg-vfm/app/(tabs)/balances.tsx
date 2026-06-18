@@ -88,26 +88,20 @@ export default function BalancesScreen() {
   }, []);
 
   const toggleSettled = useCallback((username: string) => {
+    const key = username.toLowerCase();
     setSettledUsers((current) => {
-      const next = { ...current, [username]: !current[username] };
-
-      if (!next[username]) {
-        delete next[username];
-      }
-
+      const next = { ...current, [key]: !current[key] };
+      if (!next[key]) delete next[key];
       AsyncStorage.setItem(SETTLED_USERS_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
 
   const toggleAdvancePaid = useCallback((username: string) => {
+    const key = username.toLowerCase();
     setAdvancePaidUsers((current) => {
-      const next = { ...current, [username]: !current[username] };
-
-      if (!next[username]) {
-        delete next[username];
-      }
-
+      const next = { ...current, [key]: !current[key] };
+      if (!next[key]) delete next[key];
       AsyncStorage.setItem(ADVANCE_PAID_USERS_KEY, JSON.stringify(next));
       return next;
     });
@@ -122,8 +116,9 @@ export default function BalancesScreen() {
       if (!isEarnedSale && !isOwedPurchase) return;
 
       const username = getUser(game);
+      const key = username.toLowerCase();
       const current =
-        byUser.get(username) ??
+        byUser.get(key) ??
         {
           username,
           earned: 0,
@@ -157,7 +152,7 @@ export default function BalancesScreen() {
       }
 
       current.delta = current.earned - current.owed;
-      byUser.set(username, current);
+      byUser.set(key, current);
     });
 
     return Array.from(byUser.values())
@@ -198,8 +193,8 @@ export default function BalancesScreen() {
   const renderBalance = ({ item }: { item: UserBalance }) => {
     const isPositive = item.delta > 0;
     const isNegative = item.delta < 0;
-    const isSettled = !!settledUsers[item.username];
-    const isAdvancePaid = !!advancePaidUsers[item.username];
+    const isSettled = !!settledUsers[item.username.toLowerCase()];
+    const isAdvancePaid = !!advancePaidUsers[item.username.toLowerCase()];
     const deltaColor = isPositive
       ? colors.success
       : isNegative
