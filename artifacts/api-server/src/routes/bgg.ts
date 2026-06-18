@@ -1354,6 +1354,84 @@ router.get("/bgg/marketplace-prices", async (req, res) => {
   }
 });
 
+// ── GET /bgg/thing-batch ─────────────────────────────────────────────────────
+// Returns enrichment data (categories, mechanics, player counts) for a list of
+// BGG game IDs. Results are served from the in-process thingCache when warm,
+// otherwise fetched from BGG with limited concurrency and cached for reuse.
+router.get("/bgg/thing-batch", async (req, res) => {
+  const raw = req.query.ids as string | undefined;
+  if (!raw) {
+    res.status(400).json({ error: "ids is required (comma-separated BGG object IDs)" });
+    return;
+  }
+  const ids = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  if (ids.length === 0 || ids.length > 200) {
+    res.status(400).json({ error: "ids must be 1–200 comma-separated IDs" });
+    return;
+  }
+  const apiToken = process.env[BGG_API_TOKEN_ENV_VAR]?.trim();
+  if (!apiToken) {
+    res.status(500).json({ error: `Missing ${BGG_API_TOKEN_ENV_VAR} configuration` });
+    return;
+  }
+
+  try {
+    const parser = createBggXmlParser(["item", "link"]);
+    const now = Date.now();
+
+    const uncachedIds = ids.filter((id) => {
+      const entry = thingCache.get(id);
+      return !entry || now - entry.cachedAt >= THING_CACHE_TTL_MS;
+    });
+
+    if (uncachedIds.length > 0) {
+      const BATCH_SIZE = 50;
+      const batches: string[][] = [];
+      for (let i = 0; i < uncachedIds.length; i += BATCH_SIZE) {
+        batches.push(uncachedIds.slice(i, i + BATCH_SIZE));
+      }
+      const tasks = batches.map((batch) => async () => {
+        const xml = await fetchBggXmlText(
+          `${BGG_THING_API_BASE}?id=${batch.join(",")}&type=boardgame,boardgameexpansion`,
+          apiToken, "BGG thing", "BGG thing API", BGG_THING_BATCH_TIMEOUT_MS,
+        );
+        const parsed = parser.parse(xml);
+        for (const thing of asArray(parsed.items?.item ?? [])) {
+          const id = String(thing["@_id"] ?? "");
+          if (!id) continue;
+          const links = asArray(thing.link ?? []);
+          const minP = parseInt(thing.minplayers?.["@_value"] ?? "0");
+          const maxP = parseInt(thing.maxplayers?.["@_value"] ?? "0");
+          const primaryName = asArray(thing.name).find((n: any) => n?.["@_type"] === "primary");
+          thingCache.set(id, {
+            categories: links.filter((l: any) => l["@_type"] === "boardgamecategory").map((l: any) => String(l["@_value"] ?? "")).filter(Boolean),
+            mechanics: links.filter((l: any) => l["@_type"] === "boardgamemechanic").map((l: any) => String(l["@_value"] ?? "")).filter(Boolean),
+            minPlayers: minP > 0 ? minP : undefined,
+            maxPlayers: maxP > 0 ? maxP : undefined,
+            primaryName: asText(primaryName?.["@_value"] ?? primaryName) || undefined,
+            expansionBaseIds: links.filter((l: any) => l["@_type"] === "boardgameexpansion" && l["@_inbound"] === "true").map((l: any) => String(l["@_id"] ?? "")).filter(Boolean),
+            cachedAt: Date.now(),
+          });
+        }
+      });
+      const results = await runWithConcurrencyLimit(tasks, THING_BATCH_CONCURRENCY);
+      for (const r of results) {
+        if (r.status === "rejected") req.log.warn({ err: r.reason }, "thing-batch batch failed");
+      }
+    }
+
+    const out: Record<string, { categories: string[]; mechanics: string[]; minPlayers?: number; maxPlayers?: number }> = {};
+    for (const id of ids) {
+      const entry = thingCache.get(id);
+      if (entry) out[id] = { categories: entry.categories, mechanics: entry.mechanics, minPlayers: entry.minPlayers, maxPlayers: entry.maxPlayers };
+    }
+    res.json(out);
+  } catch (err: any) {
+    req.log.error({ err }, "BGG thing-batch fetch failed");
+    res.status(502).json({ error: err.message ?? "Failed to fetch thing data" });
+  }
+});
+
 // ── GET /bgg/my-collection ────────────────────────────────────────────────────
 router.get("/bgg/my-collection", async (req, res) => {
   const { username } = req.query as Record<string, string>;

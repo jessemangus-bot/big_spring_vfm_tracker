@@ -18,6 +18,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useVFM } from "@/context/VFMContext";
 import { useColors } from "@/hooks/useColors";
+import { useEnrichment } from "@/hooks/useEnrichment";
+import type { EnrichmentMap } from "@/hooks/useEnrichment";
 
 interface CollectionGame {
   objectId: string;
@@ -32,8 +34,6 @@ interface CollectionGame {
   weight?: number;
   numplays: number;
   wantToPlay: boolean;
-  categories: string[];
-  mechanics: string[];
 }
 
 type PlayTimeFilter = "short" | "medium" | "long" | "verylong";
@@ -123,7 +123,7 @@ function playHistoryLabel(v: PlayHistoryFilter | null): string {
   return PLAY_HISTORY_OPTIONS.find((o) => o.value === v)?.label ?? "Any";
 }
 
-function filterGames(games: CollectionGame[], filters: ActiveFilters): CollectionGame[] {
+function filterGames(games: CollectionGame[], filters: ActiveFilters, enrichment: EnrichmentMap): CollectionGame[] {
   return games.filter((game) => {
     if (filters.players !== null) {
       const p = filters.players;
@@ -148,8 +148,13 @@ function filterGames(games: CollectionGame[], filters: ActiveFilters): Collectio
       if (filters.complexity === "heavy" && (game.weight < 3 || game.weight >= 4)) return false;
       if (filters.complexity === "veryheavy" && game.weight < 4) return false;
     }
-    if (filters.category !== null && !game.categories.includes(filters.category)) return false;
-    if (filters.mechanic !== null && !game.mechanics.includes(filters.mechanic)) return false;
+    const gameEnrichment = enrichment[game.objectId];
+    if (filters.category !== null) {
+      if (!gameEnrichment || !gameEnrichment.categories.includes(filters.category)) return false;
+    }
+    if (filters.mechanic !== null) {
+      if (!gameEnrichment || !gameEnrichment.mechanics.includes(filters.mechanic)) return false;
+    }
     if (filters.playHistory === "played" && game.numplays === 0) return false;
     if (filters.playHistory === "unplayed" && game.numplays > 0) return false;
     if (filters.playHistory === "wanttoplay" && !game.wantToPlay) return false;
@@ -339,32 +344,32 @@ export default function GamePickerScreen() {
     }));
   }, [games]);
 
-  // Use the hardcoded BGG list, cross-referenced with loaded games so only
-  // categories/mechanics present in the collection are shown.
-  // If thing data hasn't loaded yet, fall back to the full hardcoded list
-  // so the picker is never empty.
+  const gameIds = useMemo(() => games.map((g) => g.objectId), [games]);
+  const { enrichment, status: enrichmentStatus, progress: enrichmentProgress } = useEnrichment(gameIds);
+  const enrichmentLoaded = enrichmentStatus === "ready" || Object.keys(enrichment).length > 0;
+
+  // Cross-reference hardcoded BGG lists with enriched collection data.
+  // Fall back to the full hardcoded list until enrichment has any data.
   const categoryOptions = useMemo(() => {
     const present = new Set<string>();
-    games.forEach((g) => g.categories.forEach((c) => present.add(c)));
+    Object.values(enrichment).forEach((e) => e.categories.forEach((c) => present.add(c)));
     const list = present.size > 0
       ? ALL_BGG_CATEGORIES.filter((c) => present.has(c))
       : ALL_BGG_CATEGORIES;
     return list.map((c) => ({ label: c, value: c }));
-  }, [games]);
+  }, [enrichment]);
 
   const mechanicOptions = useMemo(() => {
     const present = new Set<string>();
-    games.forEach((g) => g.mechanics.forEach((m) => present.add(m)));
+    Object.values(enrichment).forEach((e) => e.mechanics.forEach((m) => present.add(m)));
     const list = present.size > 0
       ? ALL_BGG_MECHANICS.filter((m) => present.has(m))
       : ALL_BGG_MECHANICS;
     return list.map((m) => ({ label: m, value: m }));
-  }, [games]);
-
-  const enrichmentLoaded = games.length > 0 && games.some((g) => g.categories.length > 0 || g.mechanics.length > 0);
+  }, [enrichment]);
 
   const handleGo = () => {
-    const filtered = filterGames(games, filters);
+    const filtered = filterGames(games, filters, enrichment);
     setMatchCount(filtered.length);
     if (filtered.length === 0) {
       setResult(null);
@@ -375,7 +380,7 @@ export default function GamePickerScreen() {
   };
 
   const handleRollAgain = () => {
-    const filtered = filterGames(games, filters);
+    const filtered = filterGames(games, filters, enrichment);
     if (filtered.length === 0) { setResult(null); return; }
     const pick = filtered[Math.floor(Math.random() * filtered.length)];
     setResult(pick);
@@ -445,14 +450,14 @@ export default function GamePickerScreen() {
               value={filters.category ?? "Any"}
               onPress={() => setOpenPicker("category")}
               disabled={!enrichmentLoaded}
-              disabledHint="Loading game data…"
+              disabledHint={enrichmentStatus === "loading" ? `Loading game data… ${Math.round(enrichmentProgress * 100)}%` : "Game data unavailable"}
             />
             <FilterRow
               label="Mechanic"
               value={filters.mechanic ?? "Any"}
               onPress={() => setOpenPicker("mechanic")}
               disabled={!enrichmentLoaded}
-              disabledHint="Loading game data…"
+              disabledHint={enrichmentStatus === "loading" ? `Loading game data… ${Math.round(enrichmentProgress * 100)}%` : "Game data unavailable"}
             />
             <FilterRow
               label="Play History"
@@ -502,9 +507,9 @@ export default function GamePickerScreen() {
                   )}
                 </View>
 
-                {result.categories.length > 0 && (
+                {(enrichment[result.objectId]?.categories ?? []).length > 0 && (
                   <Text style={[styles.resultCategories, { color: colors.mutedForeground }]}>
-                    {result.categories.slice(0, 3).join(" · ")}
+                    {enrichment[result.objectId].categories.slice(0, 3).join(" · ")}
                   </Text>
                 )}
 
