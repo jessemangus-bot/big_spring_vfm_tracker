@@ -75,6 +75,28 @@ function itemToVfmPostItem(item: ForTradeItem): VfmPostItem | null {
   };
 }
 
+type PostMode = "fp" | "auction";
+
+function buildFpPostUrl(geeklistUrl: string, item: ForTradeItem): string | null {
+  const listId = extractListId(geeklistUrl);
+  if (!listId || !item.objectId) return null;
+  const body = [
+    `[B]Version:[/B] ${item.version ?? ""}`,
+    `[B]Language:[/B] ${item.language ?? ""}`,
+    `[B]Condition:[/B] ${item.tradeCondition ?? ""}`,
+    "",
+    "[B]FP:[/B] $",
+  ].join("\n");
+  const url = new URL(`https://boardgamegeek.com/geeklist/${listId}`);
+  url.searchParams.set("addListitem", "1");
+  url.searchParams.set("addListitemType", "things");
+  url.searchParams.set("addListitemId", item.objectId);
+  url.searchParams.set("addListitemBody", body);
+  const imageId = extractBggImageId(item);
+  if (imageId) url.searchParams.set("addListitemImageid", imageId);
+  return url.toString();
+}
+
 export default function ForTradeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -88,6 +110,7 @@ export default function ForTradeScreen() {
   const [trackedAuctions, setTrackedAuctions] = useState<TrackedAuction[]>([]);
   const [selectedDestIndex, setSelectedDestIndex] = useState(0);
   const [showDestPicker, setShowDestPicker] = useState(false);
+  const [postMode, setPostMode] = useState<PostMode>("fp");
 
   const listId = useMemo(
     () => extractListId(bggSettings.geeklistUrl),
@@ -269,6 +292,30 @@ export default function ForTradeScreen() {
                   </View>
                 )}
 
+                {/* FP / Auction format toggle */}
+                <View style={[styles.modeToggle, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                  {(["fp", "auction"] as const).map((mode) => (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[
+                        styles.modeBtn,
+                        postMode === mode && { backgroundColor: colors.primary },
+                      ]}
+                      onPress={() => setPostMode(mode)}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.modeBtnText,
+                          { color: postMode === mode ? colors.primaryForeground : colors.mutedForeground },
+                        ]}
+                      >
+                        {mode === "fp" ? "Fixed Price" : "Auction"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
                 <TouchableOpacity
                   style={[styles.refreshBtn, { backgroundColor: colors.primary }]}
                   onPress={() => load(true)}
@@ -293,6 +340,7 @@ export default function ForTradeScreen() {
             }
             renderItem={({ item }) => {
               const postItem = itemToVfmPostItem(item);
+              const fpUrl = postMode === "fp" ? buildFpPostUrl(selectedDest.geeklistUrl, item) : null;
 
               return (
                 <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -335,7 +383,18 @@ export default function ForTradeScreen() {
                       ) : null}
                     </View>
                     <View style={styles.actionRow}>
-                      {postItem ? (
+                      {postMode === "fp" && fpUrl ? (
+                        <TouchableOpacity
+                          style={[styles.postBtn, { backgroundColor: colors.primary }]}
+                          onPress={() => Linking.openURL(fpUrl).catch(() => {})}
+                          activeOpacity={0.75}
+                        >
+                          <Feather name="send" size={13} color={colors.primaryForeground} />
+                          <Text style={[styles.postBtnText, { color: colors.primaryForeground }]}>
+                            Add to VFM
+                          </Text>
+                        </TouchableOpacity>
+                      ) : postMode === "auction" && postItem ? (
                         <TouchableOpacity
                           style={[styles.postBtn, { backgroundColor: colors.primary }]}
                           onPress={() => setReviewItem(postItem)}
@@ -343,7 +402,7 @@ export default function ForTradeScreen() {
                         >
                           <Feather name="send" size={13} color={colors.primaryForeground} />
                           <Text style={[styles.postBtnText, { color: colors.primaryForeground }]}>
-                            Add
+                            Post as Auction
                           </Text>
                         </TouchableOpacity>
                       ) : null}
@@ -456,6 +515,21 @@ const styles = StyleSheet.create({
   destOptionText: {
     flex: 1,
     fontSize: 14,
+  },
+  modeToggle: {
+    flexDirection: "row",
+    borderRadius: 10,
+    borderWidth: 1,
+    overflow: "hidden",
+    alignSelf: "flex-start",
+  },
+  modeBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  modeBtnText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
   },
   refreshBtn: {
     marginTop: 2,

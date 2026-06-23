@@ -30,6 +30,7 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
   const { bggSettings, saveBggSettings, syncFromBgg, isSyncing } = useVFM();
 
   const [geeklistUrl, setGeeklistUrl] = useState("");
+  const [auctionGeeklistUrl, setAuctionGeeklistUrl] = useState("");
   const [username, setUsername] = useState("");
   const [realName, setRealName] = useState("");
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
@@ -38,6 +39,7 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
   useEffect(() => {
     if (visible) {
       setGeeklistUrl(bggSettings.geeklistUrl);
+      setAuctionGeeklistUrl(bggSettings.auctionGeeklistUrl ?? "");
       setUsername(bggSettings.username);
       setRealName(bggSettings.realName ?? "");
       setSyncStatus(null);
@@ -47,6 +49,7 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
 
   const buildSettings = (): BggSettings => ({
     geeklistUrl: geeklistUrl.trim(),
+    auctionGeeklistUrl: auctionGeeklistUrl.trim(),
     username: username.trim(),
     realName: realName.trim(),
   });
@@ -138,6 +141,30 @@ export function SettingsModal({ visible, onClose, onSyncComplete }: SettingsModa
             autoCorrect={false}
             keyboardType="url"
           />
+
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
+            AUCTION GEEKLIST URL
+          </Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                color: colors.foreground,
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+            value={auctionGeeklistUrl}
+            onChangeText={setAuctionGeeklistUrl}
+            placeholder="https://boardgamegeek.com/geeklist/... (optional)"
+            placeholderTextColor={colors.mutedForeground}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+          <Text style={[styles.fieldHint, { color: colors.mutedForeground }]}>
+            If left blank, auctions will post to the main geeklist URL above.
+          </Text>
 
           <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
             YOUR BGG USERNAME

@@ -47,6 +47,7 @@ export interface BggSettings {
   geeklistUrl: string;
   username: string;
   realName: string;
+  auctionGeeklistUrl?: string;
 }
 
 export interface SyncResult {
@@ -104,6 +105,7 @@ const DEFAULT_SETTINGS: BggSettings = {
   geeklistUrl: DEFAULT_GEEKLIST_URL,
   username: "",
   realName: "",
+  auctionGeeklistUrl: "",
 };
 
 type BggLocalOverrides = NonNullable<Game["localOverrides"]>;
@@ -218,8 +220,10 @@ function normalizeBggSettings(raw: unknown): BggSettings {
       : DEFAULT_SETTINGS.geeklistUrl;
   const username = typeof value.username === "string" ? value.username : "";
   const realName = typeof value.realName === "string" ? value.realName : "";
+  const auctionGeeklistUrl =
+    typeof value.auctionGeeklistUrl === "string" ? value.auctionGeeklistUrl : "";
 
-  return { geeklistUrl, username, realName };
+  return { geeklistUrl, username, realName, auctionGeeklistUrl };
 }
 
 function sleep(ms: number) {

@@ -26,6 +26,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "die.face.6", selected: "die.face.6.fill" }} />
         <Label>Pick a Game</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="deals">
+        <Icon sf={{ default: "dollarsign.circle", selected: "dollarsign.circle.fill" }} />
+        <Label>Deals</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -102,6 +106,18 @@ function ClassicTabLayout() {
               <SymbolView name="die.face.6.fill" tintColor={color} size={24} />
             ) : (
               <MaterialCommunityIcons name="dice-6-outline" size={24} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="deals"
+        options={{
+          title: "Deals",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="dollarsign.circle.fill" tintColor={color} size={24} />
+            ) : (
+              <Feather name="dollar-sign" size={22} color={color} />
             ),
         }}
       />
